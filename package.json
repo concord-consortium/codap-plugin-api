@@ -65,8 +65,6 @@
     "@types/enzyme": "^3.1.15",
     "@types/enzyme-adapter-react-16": "^1.0.3",
     "@types/jest": "^23.3.10",
-    "@types/lodash": "^4.14.119",
-    "@types/query-string": "^6.1.1",
     "@types/react": "^16.7.17",
     "@types/react-dom": "^16.0.11",
     "@types/uuid": "^3.4.4",
@@ -99,20 +97,16 @@
     "tslint-react": "^3.6.0",
     "typescript": "^3.2.2",
     "url-loader": "^1.1.2",
-    "webpack": "^4.27.1",
+    "wait-on": "^3.2.0",
+    "webpack": "^4.28.0",
     "webpack-cli": "^3.1.2",
     "webpack-dev-server": "^3.1.10"
   },
   "dependencies": {
-    "immutable": "^3.8.2",
-    "lodash": "^4.17.11",
     "mobx": "^5.8.0",
     "mobx-react": "^5.4.3",
     "mobx-state-tree": "^3.9.0",
-    "query-string": "^6.2.0",
     "react": "^16.6.3",
-    "react-dom": "^16.6.3",
-    "uuid": "^3.3.2",
-    "wait-on": "^3.2.0"
+    "react-dom": "^16.6.3"
   }
 }
