@@ -49,12 +49,7 @@ module.exports = (env, argv) => {
           test: /\.(png|woff|woff2|eot|ttf|svg)$/,
           loader: 'url-loader',
           options: {
-            limit: 8192,
-            name: 'assets/[name].[ext]',
-            publicPath: function(url) {
-              // cf. https://github.com/webpack-contrib/file-loader/issues/160#issuecomment-349771544
-              return devMode ? url : url.replace(/assets/, '.');
-            }
+            limit: 8192
           }
         }
       ]
@@ -77,11 +72,7 @@ module.exports = (env, argv) => {
       }),
       new CopyWebpackPlugin([
         {from: 'src/public'}
-      ]),
-      new CopyWebpackPlugin([{
-        from: 'src/assets',
-        to: 'assets'
-      }])
+      ])
     ]
   };
 };
