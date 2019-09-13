@@ -94,14 +94,14 @@
     "ts-jest": "^24.0.2",
     "ts-loader": "^5.4.5",
     "ts-node": "^7.0.1",
-    "tslint": "^5.19.0",
+    "tslint": "^5.20.0",
     "tslint-loader": "^3.6.0",
     "tslint-react": "^3.6.0",
-    "typescript": "^3.6.2",
+    "typescript": "^3.6.3",
     "url-loader": "^1.1.2",
     "wait-on": "^3.3.0",
     "webpack": "^4.39.3",
-    "webpack-cli": "^3.3.7",
+    "webpack-cli": "^3.3.8",
     "webpack-dev-server": "^3.8.0"
   },
   "dependencies": {
