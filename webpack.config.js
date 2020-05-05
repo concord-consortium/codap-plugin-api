@@ -1,6 +1,5 @@
 'use strict';
 
-const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
@@ -31,10 +30,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.tsx?$/,
-          loader: 'ts-loader',
-          options: {
-            transpileOnly: true // IMPORTANT! use transpileOnly mode to speed-up compilation
-          }
+          loader: 'ts-loader'
         },
         {
           test: /\.(sa|sc|c)ss$/i,
@@ -62,7 +58,6 @@ module.exports = (env, argv) => {
       warningsFilter: /export .* was not found in/
     },
     plugins: [
-      new ForkTsCheckerWebpackPlugin(),
       new MiniCssExtractPlugin({
         filename: devMode ? "assets/index.css" : "assets/index.[hash].css"
       }),
