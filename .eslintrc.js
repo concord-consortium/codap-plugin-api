@@ -35,7 +35,7 @@ module.exports = {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-require-imports": "error",
       "@typescript-eslint/no-shadow": ["error", { builtinGlobals: false, hoist: "all", allow: [] }],
-      "@typescript-eslint/no-unused-vars": ["error", { args: "none", ignoreRestSiblings: true }],
+      "@typescript-eslint/no-unused-vars": ["warn", { args: "none", ignoreRestSiblings: true }],
       "@typescript-eslint/prefer-optional-chain": "warn",
       "@typescript-eslint/no-var-requires": "off",
       curly: ["error", "multi-line", "consistent"],
