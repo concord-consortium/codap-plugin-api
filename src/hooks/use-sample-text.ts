@@ -5,4 +5,4 @@ export const useSampleText = () => {
   // If this function was only returning "Hello World", we wouldn't need any special approach to testing.
   const [ text ] = useState("Hello World");
   return text;
-}
+};
