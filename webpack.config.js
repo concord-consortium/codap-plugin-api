@@ -1,8 +1,10 @@
 'use strict';
 
+const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
@@ -17,7 +19,8 @@ module.exports = (env, argv) => {
     entry: './src/index.tsx',
     mode: 'development',
     output: {
-      filename: 'assets/index.[contenthash].js'
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'assets/index.[contenthash].js',
     },
     performance: { hints: false },
     module: {
@@ -95,6 +98,7 @@ module.exports = (env, argv) => {
           { from: 'src/public' },
         ],
       }),
+      new CleanWebpackPlugin(),
     ]
   };
 };
