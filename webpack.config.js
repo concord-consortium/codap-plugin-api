@@ -13,7 +13,7 @@ module.exports = (env, argv) => {
       contentBase: 'dist',
       hot: true
     },
-    devtool: 'source-map',
+    devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',
     mode: 'development',
     output: {
