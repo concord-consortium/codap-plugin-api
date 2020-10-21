@@ -13,7 +13,7 @@ module.exports = (env, argv) => {
     entry: './src/index.tsx',
     mode: 'development',
     output: {
-      filename: 'assets/index.[hash].js'
+      filename: 'assets/index.[fullhash].js'
     },
     performance: { hints: false },
     module: {
@@ -80,7 +80,7 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new MiniCssExtractPlugin({
-        filename: devMode ? "assets/index.css" : "assets/index.[hash].css"
+        filename: devMode ? "assets/[name].css" : "assets/[name].[contenthash].css"
       }),
       new HtmlWebpackPlugin({
         filename: 'index.html',
