@@ -33,10 +33,20 @@ module.exports = (env, argv) => {
           loader: 'ts-loader'
         },
         {
-          test: /\.(sa|sc|c)ss$/i,
+          test: /\.(sa|sc|le|c)ss$/i,
           use: [
             devMode ? 'style-loader' : MiniCssExtractPlugin.loader,
-            'css-loader',
+            {
+              loader: 'css-loader',
+              options: {
+                esModule: false,
+                modules: {
+                  // required for :import from scss files
+                  // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
+                  compileType: 'icss'
+                }
+              }
+            },
             'postcss-loader',
             'sass-loader'
           ]
