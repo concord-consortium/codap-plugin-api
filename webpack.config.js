@@ -43,10 +43,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.(png|woff|woff2|eot|ttf)$/,
-          loader: 'url-loader',
-          options: {
-            limit: 8192
-          }
+          type: 'asset'
         },
         {
           test: /\.svg$/,
@@ -54,7 +51,7 @@ module.exports = (env, argv) => {
             {
               // Do not apply SVGR import in CSS files.
               issuer: /\.(css|scss|less)$/,
-              use: 'url-loader'
+              type: 'asset'
             },
             {
               issuer: /\.tsx?$/,
