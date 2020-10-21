@@ -9,6 +9,10 @@ module.exports = (env, argv) => {
 
   return {
     context: __dirname, // to automatically find tsconfig.json
+    devServer: {
+      contentBase: 'dist',
+      hot: true
+    },
     devtool: 'source-map',
     entry: './src/index.tsx',
     mode: 'development',

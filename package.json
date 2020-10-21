@@ -34,7 +34,7 @@
     ]
   },
   "scripts": {
-    "start": "webpack serve --inline --hot --content-base dist/",
+    "start": "webpack serve",
     "build": "npm-run-all lint:build clean build:webpack",
     "build:webpack": "webpack --mode production",
     "clean": "rimraf dist",
