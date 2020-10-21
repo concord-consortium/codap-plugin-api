@@ -13,7 +13,7 @@ module.exports = (env, argv) => {
     entry: './src/index.tsx',
     mode: 'development',
     output: {
-      filename: 'assets/index.[fullhash].js'
+      filename: 'assets/index.[contenthash].js'
     },
     performance: { hints: false },
     module: {
