@@ -1,19 +1,26 @@
 'use strict';
 
+const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
 
   return {
     context: __dirname, // to automatically find tsconfig.json
-    devtool: 'source-map',
+    devServer: {
+      contentBase: 'dist',
+      hot: true
+    },
+    devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',
     mode: 'development',
     output: {
-      filename: 'assets/index.[hash].js'
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'assets/index.[contenthash].js',
     },
     performance: { hints: false },
     module: {
@@ -33,20 +40,27 @@ module.exports = (env, argv) => {
           loader: 'ts-loader'
         },
         {
-          test: /\.(sa|sc|c)ss$/i,
+          test: /\.(sa|sc|le|c)ss$/i,
           use: [
             devMode ? 'style-loader' : MiniCssExtractPlugin.loader,
-            'css-loader',
+            {
+              loader: 'css-loader',
+              options: {
+                esModule: false,
+                modules: {
+                  // required for :import from scss files
+                  // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
+                  compileType: 'icss'
+                }
+              }
+            },
             'postcss-loader',
             'sass-loader'
           ]
         },
         {
           test: /\.(png|woff|woff2|eot|ttf)$/,
-          loader: 'url-loader',
-          options: {
-            limit: 8192
-          }
+          type: 'asset'
         },
         {
           test: /\.svg$/,
@@ -54,7 +68,7 @@ module.exports = (env, argv) => {
             {
               // Do not apply SVGR import in CSS files.
               issuer: /\.(css|scss|less)$/,
-              use: 'url-loader'
+              type: 'asset'
             },
             {
               issuer: /\.tsx?$/,
@@ -73,15 +87,18 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new MiniCssExtractPlugin({
-        filename: devMode ? "assets/index.css" : "assets/index.[hash].css"
+        filename: devMode ? "assets/[name].css" : "assets/[name].[contenthash].css"
       }),
       new HtmlWebpackPlugin({
         filename: 'index.html',
         template: 'src/index.html'
       }),
-      new CopyWebpackPlugin([
-        {from: 'src/public'}
-      ])
+      new CopyWebpackPlugin({
+        patterns: [
+          { from: 'src/public' },
+        ],
+      }),
+      new CleanWebpackPlugin(),
     ]
   };
 };
