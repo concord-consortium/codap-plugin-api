@@ -40,16 +40,25 @@ languageFiles.forEach((langFile) => {
   }
 });
 
-const lang = getPageLanguage() || getFirstBrowserLanguage();
-const baseLang = getBaseLanguage(lang || "");
-const defaultLang = lang && translations[lang]
-                    ? lang
+const varRegExp = /%\{\s*([^}\s]*)\s*\}/g;
+
+const currentLang = getPageLanguage() || getFirstBrowserLanguage();
+const baseLang = getBaseLanguage(currentLang || "");
+const defaultLang = currentLang && translations[currentLang]
+                    ? currentLang
                     : baseLang && translations[baseLang]
                       ? baseLang
                       : "en";
 
-const translate = (key: string) => {
-  return translations[defaultLang][key] || `UNKNOWN KEY: ${key}`;
+const translate = (key: string, vars: any = {}, lang: string = defaultLang) => {
+  const translation = translations?.[lang]?.[key] || key;
+  return translation.replace(varRegExp, (match: string, langKey: string) => {
+    if (Object.prototype.hasOwnProperty.call(vars, langKey)) {
+      return vars[langKey];
+    } else {
+      return `'** UNKNOWN KEY: ${langKey} **`;
+    }
+  });
 };
 
 export default translate;
