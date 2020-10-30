@@ -1,5 +1,7 @@
-// To use, remove lang attribute from index.html, import translate function, and call with translation key:
-// translate("~INTRO.HELLO")
+// To use, build translation JSON files, import translate function, and call with translation key:
+// import t from "../utils/translation/translate";
+// console.log(t("INTRO.HELLO"));
+// Otherwise, add lang attribute to index.html if language is static (i.e., <html lang="en">)
 
 import enUS from "./lang/en-us.json";
 import es from "./lang/es.json";
@@ -50,7 +52,7 @@ const defaultLang = currentLang && translations[currentLang]
                       ? baseLang
                       : "en";
 
-const translate = (key: string, vars: any = {}, lang: string = defaultLang) => {
+const translate = (key: string, vars: Record<string, string> = {}, lang = defaultLang) => {
   const translation = translations?.[lang]?.[key] || key;
   return translation.replace(varRegExp, (match: string, langKey: string) => {
     if (Object.prototype.hasOwnProperty.call(vars, langKey)) {
