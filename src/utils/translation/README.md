@@ -1,6 +1,6 @@
-# Starter Projects Translation Functions
+# Starter Projects Localization
 
-The modules within `utils/translation` can be used to add text translation to a starter-projects based application.
+The modules within `utils/translation` can be used to add text localization to a starter-projects based application.
 
 ### How to use
 
@@ -14,7 +14,7 @@ Translation JSON files are added to `utils/translation/lang`.  Add a translation
 }
 ```
 
-#### Using the translation function
+#### Using the translate function
 
 Import the `translate` function found in `utils/translation/translate.ts` in your module:
 ```
@@ -39,7 +39,7 @@ console.log(t("AGE", { vars: { userAge: "25" } }));
 
 
 #### Determining the current language
-The `translate` function will first get the HTML DOM `lang` attribute of the root element of the document to determine the current page language.  If no `lang` attribute is specified, then the `translate` function will get the first valid language specified by the browser to detgermine the current page language.  Optionally, a language value can be specified when calling the `translate` function that will override the `lang` attribute and the browser settings.  Use the `lang` property of the `options` parameter to specify a language when calling the `translate` function:
+The `translate` function will first get the HTML DOM `lang` attribute of the root element of the document to determine the current page language.  If no `lang` attribute is specified, then the `translate` function will get the first valid language specified by the browser to determine the current page language.  Optionally, a language value can be specified when calling the `translate` function that will override the `lang` attribute and the browser settings.  Use the `lang` property of the `options` parameter to specify a language when calling the `translate` function:
 ```
 console.log(t("INTRO.HELLO", { lang: "es" }));
 ```
