@@ -1,8 +1,3 @@
-// To use, build translation JSON files, import translate function, and call with translation key:
-// import t from "../utils/translation/translate";
-// console.log(t("INTRO.HELLO"));
-// Otherwise, add lang attribute to index.html if language is static (i.e., <html lang="en">)
-
 import enUS from "./lang/en-us.json";
 import es from "./lang/es.json";
 
@@ -52,7 +47,15 @@ const defaultLang = currentLang && translations[currentLang]
                       ? baseLang
                       : "en";
 
-const translate = (key: string, vars: Record<string, string> = {}, lang = defaultLang) => {
+interface ITranslateOptions {
+  lang?: string;
+  count?: number;
+  vars?: Record<string, string>;
+}
+
+export default function translate (key: string, options?: ITranslateOptions) {
+  const lang = options?.lang || defaultLang;
+  const vars = options?.vars || {};
   const translation = translations?.[lang]?.[key] || key;
   return translation.replace(varRegExp, (match: string, langKey: string) => {
     if (Object.prototype.hasOwnProperty.call(vars, langKey)) {
@@ -61,6 +64,4 @@ const translate = (key: string, vars: Record<string, string> = {}, lang = defaul
       return `'** UNKNOWN KEY: ${langKey} **`;
     }
   });
-};
-
-export default translate;
+}
