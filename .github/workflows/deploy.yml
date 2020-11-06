@@ -1,5 +1,10 @@
 name: S3 Deploy
 
+# to pick up the pushing of tags we might need additional
+# properties under push like
+# push:
+#   tags:
+#   - 'v*'
 on: push
 
 jobs:
@@ -15,8 +20,11 @@ jobs:
         uses: actions/setup-ruby@v1
         with:
           ruby-version: '2.4'
-      - run: |
+      - name: Install Dependencies
+        run: |
           gem install s3_website -v 3.4.0
           npm ci
-          npm run build
-          ./s3_deploy.sh
+      - name: Build
+        run: npm run build
+      - name: Deploy
+        run: ./s3_deploy.sh
