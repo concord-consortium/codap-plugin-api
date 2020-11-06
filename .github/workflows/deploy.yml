@@ -1,0 +1,22 @@
+name: S3 Deploy
+
+on: push
+
+jobs:
+  s3-deploy:
+    name: S3 Deploy
+    runs-on: ubuntu-latest
+    steps:
+      # Checks out a copy of your repository on the ubuntu-latest machine
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+      - name: Setup Ruby 2.4
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: '2.4'
+      - run: |
+          gem install s3_website -v 3.4.0
+          npm ci
+          npm run build
+          ./s3_deploy.sh
