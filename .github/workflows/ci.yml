@@ -1,4 +1,4 @@
-name: S3 Deploy
+name: Continuous Integration
 
 # to pick up the pushing of tags we might need additional
 # properties under push like

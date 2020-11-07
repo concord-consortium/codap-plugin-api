@@ -8,10 +8,10 @@ PRODUCTION_BRANCH='production'
 # the 2> is to prevent error messages when no match is found
 CURRENT_TAG=`git describe --tags --exact-match $GITHUB_SHA 2> /dev/null`
 
-# Extract the branch or tag name fromt he GITHUB_REF
+# Extract the branch or tag name from the GITHUB_REF
 # it should either be: refs/head/branch-name or
 # or refs/tags/v1.2.3
-# since we ought to know if this is branch or tag based on the string we
+# since we ought to know if this is a branch or tag based on the ref
 # we could simplfy the CURRENT_TAG approach above
 BRANCH_OR_TAG=${GITHUB_REF#refs/*/}
 echo branch or tag: $BRANCH_OR_TAG
