@@ -17,13 +17,13 @@
     npm install
     npm update
     npm start
-    ``` 
-    Then, verify the project works by visiting [localhost:8080](http://localhost:8080) and checking for the words "Hello World". 
+    ```
+    Then, verify the project works by visiting [localhost:8080](http://localhost:8080) and checking for the words "Hello World".
     Also verify that the test suite still passes:
     ```
     npm run test:full
     ```
-    If the updates are functional, please commit any changes to `package.json` or `package-lock.json` back to the 
+    If the updates are functional, please commit any changes to `package.json` or `package-lock.json` back to the
     Starter Projects repository for future use.
 
 4. Next, re-initialize the repo to create a new history
@@ -41,8 +41,8 @@
     git remote add origin https://github.com/concord-consortium/new-repository.git
     git push -u origin master
     ```
-7. Open your new repository and update all instances of `starter-projects` to `new-repository` and `Starter Projects` to `New Repository`. 
-   Note: this will do some of the configuration for Travis deployment to S3, but you'll still need to follow 
+7. Open your new repository and update all instances of `starter-projects` to `new-repository` and `Starter Projects` to `New Repository`.
+   Note: this will do some of the configuration for Github Actions deployment to S3, but you'll still need to follow
    the instructions [here](https://docs.google.com/document/d/e/2PACX-1vTpYjbGmUMxk_FswUmapK_RzVyEtm1WdnFcNByp9mqwHnp0nR_EzRUOiubuUCsGwzQgOnut_UiabYOM/pub).
 8. Your new repository is ready! Remove this section of the `README`, and follow the steps below to use it.
 
@@ -65,16 +65,12 @@ You *do not* need to build to deploy the code, that is automatic.  See more info
 
 ## Deployment
 
-*TODO* Set up Travis Deployment
-
-Production releases to S3 are based on the contents of the /dist folder and are built automatically by Travis
+Production releases to S3 are based on the contents of the /dist folder and are built automatically by Github Actions
 for each branch pushed to GitHub and each merge into production.
 
 Merges into production are deployed to http://starter-projects.concord.org.
 
 Other branches are deployed to http://starter-projects.concord.org/branch/<name>.
-
-You can view the status of all the branch deploys [here](https://travis-ci.org/concord-consortium/starter-projects/branches).
 
 To deploy a production release:
 

@@ -1,6 +1,6 @@
 name: Continuous Integration
 
-# to pick up the pushing of tags we might need additional
+# To pick up the pushing of tags we might need additional
 # properties under push like
 # push:
 #   tags:
