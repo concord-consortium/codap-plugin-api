@@ -1,10 +1,5 @@
 name: Continuous Integration
 
-# To pick up the pushing of tags we might need additional
-# properties under push like
-# push:
-#   tags:
-#   - 'v*'
 on: push
 
 jobs:
