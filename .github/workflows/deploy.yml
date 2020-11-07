@@ -8,8 +8,9 @@ name: S3 Deploy
 on: push
 
 jobs:
-  test:
+  build_test:
     name: Build and Run Jest Tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
@@ -31,7 +32,7 @@ jobs:
   s3-deploy:
     name: S3 Deploy
     needs:
-    - test
+    - build_test
     - cypress
     runs-on: ubuntu-latest
     steps:
