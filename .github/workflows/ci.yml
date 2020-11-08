@@ -16,7 +16,7 @@ jobs:
       - name: Run Tests
         run: npm run test:coverage -- --runInBand
   cypress:
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -27,8 +27,8 @@ jobs:
   s3-deploy:
     name: S3 Deploy
     needs:
-    - build_test
-    - cypress
+      - build_test
+      - cypress
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

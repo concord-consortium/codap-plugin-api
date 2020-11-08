@@ -42,7 +42,7 @@
     git push -u origin master
     ```
 7. Open your new repository and update all instances of `starter-projects` to `new-repository` and `Starter Projects` to `New Repository`.
-   Note: this will do some of the configuration for Github Actions deployment to S3, but you'll still need to follow
+   Note: this will do some of the configuration for GitHub Actions deployment to S3, but you'll still need to follow
    the instructions [here](https://docs.google.com/document/d/e/2PACX-1vTpYjbGmUMxk_FswUmapK_RzVyEtm1WdnFcNByp9mqwHnp0nR_EzRUOiubuUCsGwzQgOnut_UiabYOM/pub).
 8. Your new repository is ready! Remove this section of the `README`, and follow the steps below to use it.
 
@@ -65,7 +65,7 @@ You *do not* need to build to deploy the code, that is automatic.  See more info
 
 ## Deployment
 
-Production releases to S3 are based on the contents of the /dist folder and are built automatically by Github Actions
+Production releases to S3 are based on the contents of the /dist folder and are built automatically by GitHub Actions
 for each branch pushed to GitHub and each merge into production.
 
 Merges into production are deployed to http://starter-projects.concord.org.
