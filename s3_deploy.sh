@@ -42,8 +42,9 @@ if [ "$BRANCH_OR_TAG" = "$CURRENT_TAG" ]; then
   INVAL_PATH="/version/$BRANCH_OR_TAG/index.html"
   # in this case we are going to deploy this code to a subfolder of version
   # So ignore everything except this folder.
-  # FIXME: the code used to be calling Regexp.escape on S3_DEPLOY_DIR
-  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR/)"
+  # Currently this only escapes `.`
+  S3_DEPLOY_DIR_ESCAPED=$(sed 's/[.]/[&]/g;' <<<"$S3_DEPLOY_DIR")
+  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR_ESCAPED/)"
 
 # root branch builds deploy to root of site
 elif [ "$BRANCH_OR_TAG" = "$ROOT_BRANCH" ]; then
@@ -61,8 +62,9 @@ else
   INVAL_PATH="/branch/$DEPLOY_DIR_NAME/index.html"
   # in this case we are going to deploy this code to a subfolder of branch
   # So ignore everything except this folder.
-  # FIXME: the code used to be calling Regexp.escape on S3_DEPLOY_DIR
-  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR/)"
+  # Currently this only escapes `.`
+  S3_DEPLOY_DIR_ESCAPED=$(sed 's/[.]/[&]/g;' <<<"$S3_DEPLOY_DIR")
+  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR_ESCAPED/)"
 fi
 
 # used by s3_website.yml
