@@ -75,6 +75,7 @@ export DISTRIBUTION_DOMAIN
 mv $SRC_DIR $DEPLOY_DEST
 
 # deploy the site contents
+echo Deploying "$BRANCH_OR_TAG" to "$PROJECT_NAME/$S3_DEPLOY_DIR"...
 # temporarily add dry-run switch to make sure recent changes are doing the right thing
 s3_website push --dry-run --site _site
 
