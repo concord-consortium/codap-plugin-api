@@ -4,7 +4,7 @@
 PROJECT_NAME='starter-projects'
 # AWS CloudFront distribution ID
 DISTRIBUTION_ID='E1YPVV3YLYS4J7'
-# AWS CloudFrong distribution domain
+# AWS CloudFront distribution domain
 DISTRIBUTION_DOMAIN='starter-projects.concord.org'
 # name of branch to deploy to root of site
 ROOT_BRANCH='production'
