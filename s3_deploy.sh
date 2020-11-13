@@ -78,7 +78,6 @@ mv $SRC_DIR $DEPLOY_DEST
 
 # deploy the site contents
 echo Deploying "$BRANCH_OR_TAG" to "$PROJECT_NAME/$S3_DEPLOY_DIR"...
-# temporarily add dry-run switch to make sure recent changes are doing the right thing
 s3_website push --site _site
 
 # explicit CloudFront invalidation to workaround s3_website gem invalidation bug
