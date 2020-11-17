@@ -21,7 +21,8 @@ SRC_DIR='dist'
 
 # extract current TAG if present
 # the 2> is to prevent error messages when no match is found
-CURRENT_TAG=`git describe --tags --exact-match $GITHUB_SHA 2> /dev/null`
+# the \\ echo prevents script exit when it doesn't match
+CURRENT_TAG=`git describe --tags --exact-match $GITHUB_SHA 2> /dev/null || echo ''`
 
 # Extract the branch or tag name from the GITHUB_REF
 # it should either be: refs/head/branch-name or
