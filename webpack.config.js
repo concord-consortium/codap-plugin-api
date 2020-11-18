@@ -62,8 +62,16 @@ module.exports = (env, argv) => {
           test: /\.(png|woff|woff2|eot|ttf)$/,
           type: 'asset'
         },
+        { // disable svgo optimization for files ending in .nosvgo.svg
+          test: /\.nosvgo\.svg$/i,
+          loader: '@svgr/webpack',
+          options: {
+            svgo: false
+          }
+        },
         {
-          test: /\.svg$/,
+          test: /\.svg$/i,
+          exclude: /\.nosvgo\.svg$/i,
           oneOf: [
             {
               // Do not apply SVGR import in CSS files.
@@ -72,7 +80,22 @@ module.exports = (env, argv) => {
             },
             {
               issuer: /\.tsx?$/,
-              loader: '@svgr/webpack'
+              loader: '@svgr/webpack',
+              options: {
+                svgoConfig: {
+                  plugins: [
+                    // leave <line>s, <rect>s and <circle>s alone
+                    // https://github.com/svg/svgo/blob/master/plugins/convertShapeToPath.js
+                    { convertShapeToPath: false },
+                    // leave "class"es and "id"s alone
+                    // https://github.com/svg/svgo/blob/master/plugins/prefixIds.js
+                    { prefixIds: false },
+                    // leave "stroke"s and "fill"s alone
+                    // https://github.com/svg/svgo/blob/master/plugins/removeUnknownsAndDefaults.js
+                    { removeUnknownsAndDefaults: { defaultAttrs: false } }
+                  ]
+                }
+              }
             }
           ]
         }
