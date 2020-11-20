@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# Typically this is the Project name.
+# The trailing slash is important
+# Can be set to an empty string for working at the top level of the bucket
+S3_BUCKET_PREFIX='starter-projects/'
+# AWS CloudFront distribution ID
+DISTRIBUTION_ID='E1YPVV3YLYS4J7'
+# AWS CloudFront distribution domain
+DISTRIBUTION_DOMAIN='starter-projects.concord.org'
+# name of branch to deploy to root of site
+ROOT_BRANCH='production'
+# Bucket to deploy to, typically this is 'model-resourcs', but some projects
+# have their own buckets
+S3_BUCKET='models-resources'
+# location of built files
+SRC_DIR='dist'
+
 # exit when any command fails
 set -e
 
@@ -8,20 +24,9 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 # echo an error message before exiting
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
-# Project Name used as folder in S3 bucket
-PROJECT_NAME='starter-projects'
-# AWS CloudFront distribution ID
-DISTRIBUTION_ID='E1YPVV3YLYS4J7'
-# AWS CloudFront distribution domain
-DISTRIBUTION_DOMAIN='starter-projects.concord.org'
-# name of branch to deploy to root of site
-ROOT_BRANCH='production'
-# location of built files
-SRC_DIR='dist'
-
 # extract current TAG if present
 # the 2> is to prevent error messages when no match is found
-# the \\ echo prevents script exit when it doesn't match
+# the || echo prevents script exit when it doesn't match
 CURRENT_TAG=`git describe --tags --exact-match $GITHUB_SHA 2> /dev/null || echo ''`
 
 # Extract the branch or tag name from the GITHUB_REF
@@ -53,7 +58,7 @@ if [ "$BRANCH_OR_TAG" = "$CURRENT_TAG" ]; then
   # So ignore everything except this folder.
   # Currently this only escapes `.`
   S3_DEPLOY_DIR_ESCAPED=$(sed 's/[.]/[&]/g;' <<<"$S3_DEPLOY_DIR")
-  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR_ESCAPED/)"
+  IGNORE_ON_SERVER="^(?!$S3_BUCKET_PREFIX$S3_DEPLOY_DIR_ESCAPED/)"
 
 # root branch builds deploy to root of site
 elif [ "$BRANCH_OR_TAG" = "$ROOT_BRANCH" ]; then
@@ -61,7 +66,7 @@ elif [ "$BRANCH_OR_TAG" = "$ROOT_BRANCH" ]; then
   INVAL_PATH="/index.html"
   # in this case we are going to deploy this branch to the top level
   # so we need to ignore the version and branch folders
-  IGNORE_ON_SERVER="^$PROJECT_NAME/(version/|branch/)"
+  IGNORE_ON_SERVER="^$S3_BUCKET_PREFIX(version/|branch/)"
 
 # branch builds deploy to /branch/BRANCH_NAME
 else
@@ -73,20 +78,21 @@ else
   # So ignore everything except this folder.
   # Currently this only escapes `.`
   S3_DEPLOY_DIR_ESCAPED=$(sed 's/[.]/[&]/g;' <<<"$S3_DEPLOY_DIR")
-  IGNORE_ON_SERVER="^(?!$PROJECT_NAME/$S3_DEPLOY_DIR_ESCAPED/)"
+  IGNORE_ON_SERVER="^(?!$S3_BUCKET_PREFIX$S3_DEPLOY_DIR_ESCAPED/)"
 fi
 
 # used by s3_website.yml
-export PROJECT_NAME
+export S3_BUCKET_PREFIX
 export IGNORE_ON_SERVER
 export DISTRIBUTION_ID
 export DISTRIBUTION_DOMAIN
+export S3_BUCKET
 
 # copy files to destination
 mv $SRC_DIR $DEPLOY_DEST
 
 # deploy the site contents
-echo Deploying "$BRANCH_OR_TAG" to "$PROJECT_NAME/$S3_DEPLOY_DIR"...
+echo Deploying "$BRANCH_OR_TAG" to "$S3_BUCKET:$S3_BUCKET_PREFIX$S3_DEPLOY_DIR"...
 s3_website push --site _site
 
 # explicit CloudFront invalidation to workaround s3_website gem invalidation bug

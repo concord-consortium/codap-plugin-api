@@ -1,5 +1,10 @@
-s3_bucket: models-resources
-s3_key_prefix: <%= ENV['PROJECT_NAME'] %>
+s3_bucket: <%= ENV['S3_BUCKET'] %>
+# only add the s3_key_prefix if there is one
+<% if ENV['S3_BUCKET_PREFIX'] != '' %>
+# Everywhere else the s3 prefix needs a trailing slash
+# However s3_website config doesn't need one
+s3_key_prefix: <%= ENV['S3_BUCKET_PREFIX'].sub(/\\/$/, '') %>
+<% end %>
 s3_endpoint: us-east-1
 gzip: true
 
@@ -9,9 +14,9 @@ cloudfront_wildcard_invalidation: true
 
 ignore_on_server: <%= ENV['IGNORE_ON_SERVER'] %>
 max_age:
-  "<%= ENV['PROJECT_NAME'] %>/*": 600 # 10 minutes
-  "<%= ENV['PROJECT_NAME'] %>/version/*": 31536000 # 1 year
-  "<%= ENV['PROJECT_NAME'] %>/branch/*": 0
+  "<%= ENV['S3_BUCKET_PREFIX'] %>*": 600 # 10 minutes
+  "<%= ENV['S3_BUCKET_PREFIX'] %>version/*": 31536000 # 1 year
+  "<%= ENV['S3_BUCKET_PREFIX'] %>branch/*": 0
 
 cloudfront_distribution_config:
   aliases:
