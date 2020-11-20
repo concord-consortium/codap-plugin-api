@@ -1,7 +1,8 @@
 s3_bucket: <%= ENV['S3_BUCKET'] %>
 # Everywhere else the s3 prefix needs a trailing slash
 # However s3_website config need one
-s3_key_prefix: <%= ENV['S3_BUCKET_PREFIX'].sub(/\/$/, '') %>
+# double backslash `\\` is needed for erb escaping
+s3_key_prefix: <%= ENV['S3_BUCKET_PREFIX'].sub(/\\/$/, '') %>
 s3_endpoint: us-east-1
 gzip: true
 

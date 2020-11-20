@@ -26,7 +26,7 @@ trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 # extract current TAG if present
 # the 2> is to prevent error messages when no match is found
-# the \\ echo prevents script exit when it doesn't match
+# the || echo prevents script exit when it doesn't match
 CURRENT_TAG=`git describe --tags --exact-match $GITHUB_SHA 2> /dev/null || echo ''`
 
 # Extract the branch or tag name from the GITHUB_REF
