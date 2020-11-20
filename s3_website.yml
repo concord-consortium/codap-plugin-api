@@ -1,9 +1,10 @@
 s3_bucket: <%= ENV['S3_BUCKET'] %>
+# only add the s3_key_prefix if there is one
+<% if ENV['S3_BUCKET_PREFIX'] != '' %>
 # Everywhere else the s3 prefix needs a trailing slash
-# However s3_website config need one
-# double backslash `\\` is needed for erb escaping
+# However s3_website config doesn't need one
 s3_key_prefix: <%= ENV['S3_BUCKET_PREFIX'].sub(/\\/$/, '') %>
-s3_endpoint: us-east-1
+<% end %>s3_endpoint: us-east-1
 gzip: true
 
 cloudfront_distribution_id: <%= ENV['DISTRIBUTION_ID'] %>
