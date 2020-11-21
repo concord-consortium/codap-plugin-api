@@ -60,8 +60,15 @@
     "url": "https://github.com/concord-consortium/starter-projects/issues"
   },
   "homepage": "https://github.com/concord-consortium/starter-projects#readme",
+  "nyc": {
+    "extends": "@istanbuljs/nyc-config-typescript",
+    "all": true,
+    "report-dir": "coverage-cypress"
+  },
   "devDependencies": {
     "@cypress/webpack-preprocessor": "^5.4.8",
+    "@cypress/code-coverage": "^2.0.5",
+    "@istanbuljs/nyc-config-typescript": "^1.0.1",
     "@svgr/webpack": "^5.4.0",
     "@testing-library/react-hooks": "^3.4.2",
     "@types/enzyme": "^3.10.7",
@@ -92,6 +99,8 @@
     "file-loader": "^6.1.1",
     "html-webpack-plugin": "^5.0.0-alpha.6",
     "identity-obj-proxy": "^3.0.0",
+    "istanbul-instrumenter-loader": "^3.0.1",
+    "istanbul-lib-coverage": "^3.0.0",
     "jest": "^26.6.0",
     "mini-css-extract-plugin": "^1.1.1",
     "node-sass": "^4.14.1",
