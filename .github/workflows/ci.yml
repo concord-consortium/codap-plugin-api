@@ -15,6 +15,10 @@ jobs:
         run: npm run build
       - name: Run Tests
         run: npm run test:coverage -- --runInBand
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          flags: jest
   cypress:
     runs-on: ubuntu-latest
     steps:
@@ -24,7 +28,13 @@ jobs:
         with:
           start: npm start
           wait-on: 'http://localhost:8080'
+          # only record the results to dashboard.cypress.io if CYPRESS_RECORD_KEY is set
+          record: ${{ !!secrets.CYPRESS_RECORD_KEY }}
         env:
+          # pass the Dashboard record key as an environment variable
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          # pass GitHub token to allow accurately detecting a build vs a re-run build
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # turn on code coverage when running npm start
           # so far we've been using a webpack istanbul-instrumenter-loader for this
           # but there has been work on building code coverage into node itself, which
