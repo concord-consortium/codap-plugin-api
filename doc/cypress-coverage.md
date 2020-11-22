@@ -6,9 +6,9 @@ More information about all of this can be found here: https://github.com/cypress
 
 ## Cypress end to end tests
 
-The cypress E2E tests are run against the application source which is served by webpack-dev-server. This application source is run in a cypress controlled browser. For code coverage we need to track which lines of the source are hit when the cypress test are running, and thens save this info so reports can be produced from it.
+The cypress E2E tests are run against the application source which is served by webpack-dev-server. This application source is run in a cypress controlled browser. For code coverage we need to track which lines of the source are hit when the cypress tests are running, and then save this info so reports can be produced from it.
 
-The first step in the process is tracking which lines of code are hit. This is done by the `istanbul-instrumenter-loader`. This loader is configured with `enforce: post` so that it is applied at the end of the processing chain. This project only enables this loader when the `CODE_COVERAGE` environement variable is set. You can verify it is working by:
+The first step in the process is tracking which lines of code are hit. This is done by the `istanbul-instrumenter-loader`. This loader is configured with `enforce: post` so that it is applied at the end of the processing chain. This project only enables this loader when the `CODE_COVERAGE` environment variable is set. You can verify it is working by:
 - run `CODE_COVERAGE=true npm start`
 - visit the site in a browser
 - look in the browser console for `window.__coverage__`
