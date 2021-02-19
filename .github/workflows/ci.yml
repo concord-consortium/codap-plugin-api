@@ -60,14 +60,14 @@ jobs:
     needs:
       - build_test
       - cypress
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
-      - name: Setup Ruby 2.4
+      - name: Setup Ruby
         uses: actions/setup-ruby@v1
         with:
-          ruby-version: '2.4'
+          ruby-version: '2.7'
       - name: Install Dependencies
         run: |
           gem install s3_website -v 3.4.0
