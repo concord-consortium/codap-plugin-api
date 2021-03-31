@@ -91,9 +91,9 @@ export S3_BUCKET
 # copy files to destination
 mv $SRC_DIR $DEPLOY_DEST
 
-# deploy the site contents
+# deploy the site contents; increase memory for s3_website gem
 echo Deploying "$BRANCH_OR_TAG" to "$S3_BUCKET:$S3_BUCKET_PREFIX$S3_DEPLOY_DIR"...
-s3_website push --site _site
+JAVA_TOOL_OPTIONS="-Xms1g -Xmx2g" s3_website push --site _site
 
 # explicit CloudFront invalidation to workaround s3_website gem invalidation bug
 # with origin path (https://github.com/laurilehmijoki/s3_website/issues/207).
