@@ -5,6 +5,8 @@ const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
+const SUB_DIR_PATH = process.env.SUB_DIR_PATH;
+
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
 
@@ -123,8 +125,15 @@ module.exports = (env, argv) => {
       new HtmlWebpackPlugin({
         filename: 'index.html',
         template: 'src/index.html',
-        favicon: 'src/public/favicon.ico'
+        favicon: 'src/public/favicon.ico',
+        publicPath: '.'
       }),
+      ...(SUB_DIR_PATH ? [new HtmlWebpackPlugin({
+        filename: 'index-top.html',
+        template: 'src/index.html',
+        favicon: 'src/public/favicon.ico',
+        publicPath: SUB_DIR_PATH
+      })] : []),
       new CleanWebpackPlugin(),
     ]
   };

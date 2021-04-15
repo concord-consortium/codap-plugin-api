@@ -72,8 +72,30 @@ jobs:
         run: |
           gem install s3_website -v 3.4.0
           npm ci
+      - uses: actions/github-script@v3
+        id: sub-directory
+        with:
+          result-encoding: string
+          script: |
+            const version = context.ref.match(/refs\/tags\/(.*)/)?.[1];
+            const branch = context.ref.match(/refs\/heads\/(.*)/)?.[1];
+            if (version) {
+              return `version/${version}`;
+            }
+            if (branch) {
+              const ptPrefixRegEx = \^[0-9]{8,}-(.+)$\;
+              const ptSuffixRegEx = \^(.+)-[0-9]{8,}$\;
+              const strippedBranch =
+                branch.match(ptPrefixRegEx)?.[1] ??
+                branch.match(ptSuffixRegEx)?.[1] ??
+                branch;
+              return `branch/${srippedBranch}`;
+            }
+            throw new Error(`Unknown ref: ${context.ref}`);
       - name: Build
         run: npm run build
+        env:
+          SUB_DIR_PATH: ${{ steps.sub-directory.outputs.result }}
       - name: Deploy
         run: ./s3_deploy.sh
         env:
