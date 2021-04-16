@@ -83,13 +83,13 @@ jobs:
               return `version/${version}`;
             }
             if (branch) {
-              const ptPrefixRegEx = \^[0-9]{8,}-(.+)$\;
-              const ptSuffixRegEx = \^(.+)-[0-9]{8,}$\;
+              const ptPrefixRegEx = /^[0-9]{8,}-(.+)$/;
+              const ptSuffixRegEx = /^(.+)-[0-9]{8,}$/;
               const strippedBranch =
                 branch.match(ptPrefixRegEx)?.[1] ??
                 branch.match(ptSuffixRegEx)?.[1] ??
                 branch;
-              return `branch/${srippedBranch}`;
+              return `branch/${strippedBranch}`;
             }
             throw new Error(`Unknown ref: ${context.ref}`);
       - name: Build
