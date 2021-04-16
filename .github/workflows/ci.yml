@@ -77,18 +77,22 @@ jobs:
         with:
           result-encoding: string
           script: |
-            const version = context.ref.match(/refs\/tags\/(.*)/)?.[1];
-            const branch = context.ref.match(/refs\/heads\/(.*)/)?.[1];
+            const versionMatch = context.ref.match(/refs\/tags\/(.*)/);
+            const version = versionMatch && versionMatch[1];
+            const branchMatch = context.ref.match(/refs\/heads\/(.*)/);
+            const branch = branchMatch && branchMatch[1];
             if (version) {
               return `version/${version}`;
             }
             if (branch) {
-              const ptPrefixRegEx = /^[0-9]{8,}-(.+)$/;
-              const ptSuffixRegEx = /^(.+)-[0-9]{8,}$/;
-              const strippedBranch =
-                branch.match(ptPrefixRegEx)?.[1] ??
-                branch.match(ptSuffixRegEx)?.[1] ??
-                branch;
+              const prefixStripMatch = branch.match(/^[0-9]{8,}-(.+)$/);
+              const suffixStripMatch = branch.match(/^(.+)-[0-9]{8,}$/);
+              let strippedBranch = branch;
+              if (prefixStripMatch) {
+                strippedBranch = prefixStripMatch[1];
+              } else if (suffixStripMatch) {
+                strippedBranch = suffixStripMatch[1];
+              }
               return `branch/${strippedBranch}`;
             }
             throw new Error(`Unknown ref: ${context.ref}`);
