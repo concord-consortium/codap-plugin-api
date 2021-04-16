@@ -3,7 +3,6 @@
 const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 module.exports = (env, argv) => {
@@ -123,12 +122,8 @@ module.exports = (env, argv) => {
       }),
       new HtmlWebpackPlugin({
         filename: 'index.html',
-        template: 'src/index.html'
-      }),
-      new CopyWebpackPlugin({
-        patterns: [
-          { from: 'src/public' },
-        ],
+        template: 'src/index.html',
+        favicon: 'src/public/favicon.ico'
       }),
       new CleanWebpackPlugin(),
     ]
