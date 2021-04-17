@@ -74,10 +74,6 @@ jobs:
           npm ci
       - uses: concord-consortium/s3-deploy-action@initial-version
         id: deployPath
-      - name: Build
-        run: npm run build
-        env:
-          SUB_DIR_PATH: ${{ steps.deployPath.outputs.deployPath }}
       - name: Deploy
         run: ./s3_deploy.sh
         env:
