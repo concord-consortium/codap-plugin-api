@@ -72,3 +72,4 @@ jobs:
           prefix: starter-projects
           awsAccessKeyId: ${{ secrets.AWS_ACCESS_KEY_ID }}
           awsSecretAccessKey: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          topBranches: | ["support-top-leve-index"]
