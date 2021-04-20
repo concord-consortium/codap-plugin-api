@@ -60,22 +60,13 @@ jobs:
     needs:
       - build_test
       - cypress
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
-      - name: Setup Ruby
-        uses: actions/setup-ruby@v1
-        with:
-          ruby-version: '2.7'
-      - name: Install Dependencies
-        run: |
-          gem install s3_website -v 3.4.0
-          npm ci
       - uses: concord-consortium/s3-deploy-action@initial-version
-        id: deployPath
-      - name: Deploy
-        run: ./s3_deploy.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        with:
+          bucket: models-resources
+          prefix: starter-projects
+          awsAccessKeyId: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          awsSecretAccessKey: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
