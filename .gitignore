@@ -9,5 +9,3 @@ npm-error.log
 # Editors
 .idea
 
-# Local SSL certificates:
-localhost-ssl

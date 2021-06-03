@@ -34,9 +34,9 @@
     ]
   },
   "scripts": {
-    "start": "webpack serve",
-    "start:secure": "webpack serve --https --inline --hot --content-base dist/ --cert ./localhost-ssl/localhost.pem --key ./localhost-ssl/localhost.key",
-    "start:secure:no-certs": "webpack serve --https --inline --hot --content-base dist/",
+    "start": "webpack serve --no-https",
+    "start:secure": "webpack serve",
+    "start:secure:no-certs": "webpack serve --no-https-request-cert ",
     "build": "npm-run-all lint:build build:webpack",
     "build:webpack": "webpack --mode production",
     "lint": "eslint \"./src/**/*.{js,jsx,ts,tsx}\"",
@@ -118,7 +118,7 @@
     "wait-on": "^5.3.0",
     "webpack": "^5.33.2",
     "webpack-cli": "^4.6.0",
-    "webpack-dev-server": "^3.11.2"
+    "webpack-dev-server": "^4.0.0-beta.3"
   },
   "dependencies": {
     "react": "^17.0.2",
