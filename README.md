@@ -59,6 +59,21 @@
 2. Run `npm install` to pull dependencies
 3. Run `npm start` to run `webpack-dev-server` in development mode with hot module replacement
 
+#### Run using HTTPS
+
+Additional steps are required to run using HTTPS.
+
+1. install [mkcert](https://github.com/FiloSottile/mkcert) :  `brew install mkcert` (install using Scoop or Chocolatey on Windows)
+2. Create and install the trusted CA in keychain if it doesn't already exist:   `mkcert -install`
+3. Ensure you have a `localhost-ssl` certificate directory in the root of the project folder (create if needed): `cd localhost-ssl`
+4. Make the cert files: `mkcert -cert-file localhost.pem -key-file localhost.key localhost 127.0.0.1 ::1`
+5. Run `npm run start:secure` to run `webpack-dev-server` in development mode with hot module replacement
+
+Alternately, you can run secure without certificates in Chrome:
+1. Enter `chrome://flags/#allow-insecure-localhost` in Chrome URL bar
+2. Change flag from disabled to enabled
+3. Run `npm run start:secure:no-certs` to run `webpack-dev-server` in development mode with hot module replacement
+
 ### Building
 
 If you want to build a local version run `npm build`, it will create the files in the `dist` folder.
