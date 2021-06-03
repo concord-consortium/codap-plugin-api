@@ -4,7 +4,6 @@ const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
-const fs = require('fs');
 const os = require('os');
 
 module.exports = (env, argv) => {
@@ -16,8 +15,8 @@ module.exports = (env, argv) => {
       static: 'dist',
       hot: true,
       https: {
-        key: fs.readFileSync(path.resolve(os.homedir(), '.localhost-ssl/localhost.key')),
-        cert: fs.readFileSync(path.resolve(os.homedir(), '.localhost-ssl/localhost.pem')),
+        key: path.resolve(os.homedir(), '.localhost-ssl/localhost.key'),
+        cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
       },
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
