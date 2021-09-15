@@ -4,6 +4,7 @@ const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const os = require('os');
 
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
@@ -11,8 +12,12 @@ module.exports = (env, argv) => {
   return {
     context: __dirname, // to automatically find tsconfig.json
     devServer: {
-      contentBase: 'dist',
-      hot: true
+      static: 'dist',
+      hot: true,
+      https: {
+        key: path.resolve(os.homedir(), '.localhost-ssl/localhost.key'),
+        cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
+      },
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',
