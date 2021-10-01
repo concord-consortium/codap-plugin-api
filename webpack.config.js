@@ -63,7 +63,7 @@ module.exports = (env, argv) => {
                 modules: {
                   // required for :import from scss files
                   // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
-                  compileType: 'icss'
+                  mode: 'icss'
                 }
               }
             },

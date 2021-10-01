@@ -1,10 +1,10 @@
 import React from "react";
 import { Text } from "./text";
-import { shallow } from "enzyme";
+import { render, screen } from "@testing-library/react";
 
 describe("Text component", () => {
   it("renders provided text", () => {
-    const wrapper = shallow(<Text text="Hello World"/>);
-    expect(wrapper.text()).toEqual("Hello World");
+    render(<Text text="Hello World"/>);
+    expect(screen.getByText("Hello World")).toBeDefined();
   });
 });
