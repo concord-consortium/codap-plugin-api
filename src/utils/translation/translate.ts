@@ -2,8 +2,8 @@ import enUS from "./lang/en-us.json";
 import es from "./lang/es.json";
 
 const languageFiles = [
-  {key: "en-US", contents: enUS},   // US English
-  {key: "es",    contents: es},     // Spanish
+  { key: "en-US", contents: enUS },   // US English
+  { key: "es",    contents: es },     // Spanish
 ];
 
 // returns baseLANG from baseLANG-REGION if REGION exists
