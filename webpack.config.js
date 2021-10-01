@@ -3,8 +3,8 @@
 const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const os = require('os');
 
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
@@ -12,8 +12,12 @@ module.exports = (env, argv) => {
   return {
     context: __dirname, // to automatically find tsconfig.json
     devServer: {
-      contentBase: 'dist',
-      hot: true
+      static: 'dist',
+      hot: true,
+      https: {
+        key: path.resolve(os.homedir(), '.localhost-ssl/localhost.key'),
+        cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
+      },
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',
@@ -59,7 +63,7 @@ module.exports = (env, argv) => {
                 modules: {
                   // required for :import from scss files
                   // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
-                  compileType: 'icss'
+                  mode: 'icss'
                 }
               }
             },
@@ -123,12 +127,8 @@ module.exports = (env, argv) => {
       }),
       new HtmlWebpackPlugin({
         filename: 'index.html',
-        template: 'src/index.html'
-      }),
-      new CopyWebpackPlugin({
-        patterns: [
-          { from: 'src/public' },
-        ],
+        template: 'src/index.html',
+        favicon: 'src/public/favicon.ico'
       }),
       new CleanWebpackPlugin(),
     ]
