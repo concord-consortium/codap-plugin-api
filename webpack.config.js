@@ -114,7 +114,7 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new ESLintPlugin({
-        extensions: ['ts', 'tsx', 'js'],
+        extensions: ['ts', 'tsx', 'js', 'jsx'],
       }),
       new MiniCssExtractPlugin({
         filename: devMode ? "assets/[name].css" : "assets/[name].[contenthash].css"
