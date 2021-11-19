@@ -4,6 +4,8 @@ const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const ESLintPlugin = require('eslint-webpack-plugin');
+const os = require('os');
 
 // DEPLOY_PATH is set by the s3-deploy-action its value will be:
 // `branch/[branch-name]/` or `version/[tag-name]/`
@@ -17,8 +19,12 @@ module.exports = (env, argv) => {
   return {
     context: __dirname, // to automatically find tsconfig.json
     devServer: {
-      contentBase: 'dist',
-      hot: true
+      static: 'dist',
+      hot: true,
+      https: {
+        key: path.resolve(os.homedir(), '.localhost-ssl/localhost.key'),
+        cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
+      },
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',
@@ -30,16 +36,6 @@ module.exports = (env, argv) => {
     performance: { hints: false },
     module: {
       rules: [
-        {
-          test: /\.tsx?$/,
-          enforce: 'pre',
-          use: [
-            {
-              loader: 'eslint-loader',
-              options: {}
-            }
-          ]
-        },
         {
           test: /\.tsx?$/,
           loader: 'ts-loader'
@@ -64,7 +60,7 @@ module.exports = (env, argv) => {
                 modules: {
                   // required for :import from scss files
                   // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
-                  compileType: 'icss'
+                  mode: 'icss'
                 }
               }
             },
@@ -123,6 +119,9 @@ module.exports = (env, argv) => {
       warningsFilter: /export .* was not found in/
     },
     plugins: [
+      new ESLintPlugin({
+        extensions: ['ts', 'tsx', 'js', 'jsx'],
+      }),
       new MiniCssExtractPlugin({
         filename: devMode ? "assets/[name].css" : "assets/[name].[contenthash].css"
       }),
