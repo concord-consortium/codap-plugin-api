@@ -88,11 +88,12 @@ You *do not* need to build to deploy the code, that is automatic.  See more info
 ## Deployment
 
 Production releases to S3 are based on the contents of the /dist folder and are built automatically by GitHub Actions
-for each branch pushed to GitHub and each merge into production.
+for each branch and tag pushed to GitHub.
 
-Merges into production are deployed to http://starter-projects.concord.org.
+Branches are deployed to http://starter-projects.concord.org/branch/<name>.
+If the branch name starts or ends with a number this number is stripped off.
 
-Other branches are deployed to http://starter-projects.concord.org/branch/<name>.
+Tags are deployed to http://starter-projects.concord.org/version/<name>.
 
 To deploy a production release:
 
@@ -103,10 +104,14 @@ To deploy a production release:
 5. Copy asset size markdown table from previous release and change sizes to match new sizes in `dist`
 6. Create `release-<version>` branch and commit changes, push to GitHub, create PR and merge
 7. Checkout master and pull
-8. Checkout production
-9. Run `git merge master --no-ff`
-10. Push production to GitHub
-11. Use https://github.com/concord-consortium/starter-projects/releases to create a new release tag
+8. Create an annotated tag for the version, of the form `v[x].[y].[z]`, include at least the version in the tag message. On the command line this can be done with a command like `git tag -a v1.2.3 -m "1.2.3 some info about this version"`
+9. Push the tag to github with a command like: `git push origin v1.2.3`.
+10. Use https://github.com/concord-consortium/starter-projects/releases to make this tag into a GitHub release.
+11. Run the release workflow to update http://starter-projects.concord.org/index.html. 
+    1. Navigate to the actions page in GitHub and the click the "Release" workflow. This should take you to this page: https://github.com/concord-consortium/starter-projects/actions/workflows/release.yml. 
+    2. Click the "Run workflow" menu button. 
+    3. Type in the tag name you want to release for example `v1.2.3`.  (Note this won't work until the PR has been merged to master)
+    4. Click the `Run Workflow` button.
 
 ### Testing
 
