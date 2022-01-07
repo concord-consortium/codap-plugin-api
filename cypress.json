@@ -3,5 +3,8 @@
   "video": false,
   "fixturesFolder": false,
   "projectId": "r9de4a",
-  "defaultCommandTimeout": 8000
+  "defaultCommandTimeout": 8000,
+  "env": {
+    "coverage": false
+  }
 }

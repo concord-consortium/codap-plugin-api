@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const ESLintPlugin = require('eslint-webpack-plugin');
@@ -32,13 +32,13 @@ module.exports = (env, argv) => {
       rules: [
         {
           test: /\.tsx?$/,
-          loader: 'ts-loader'
+          loader: 'ts-loader',
         },
         // This code coverage instrumentation should only be added when needed. It makes
         // the code larger and slower
         process.env.CODE_COVERAGE ? {
           test: /\.[tj]sx?$/,
-          loader: 'istanbul-instrumenter-loader',
+          loader: '@jsdevtools/coverage-istanbul-loader',
           options: { esModules: true },
           enforce: 'post',
           exclude: path.join(__dirname, 'node_modules'),
@@ -54,24 +54,24 @@ module.exports = (env, argv) => {
                 modules: {
                   // required for :import from scss files
                   // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
-                  mode: 'icss'
-                }
-              }
+                  mode: 'icss',
+                },
+              },
             },
             'postcss-loader',
-            'sass-loader'
-          ]
+            'sass-loader',
+          ],
         },
         {
           test: /\.(png|woff|woff2|eot|ttf)$/,
-          type: 'asset'
+          type: 'asset',
         },
         { // disable svgo optimization for files ending in .nosvgo.svg
           test: /\.nosvgo\.svg$/i,
           loader: '@svgr/webpack',
           options: {
-            svgo: false
-          }
+            svgo: false,
+          },
         },
         {
           test: /\.svg$/i,
@@ -80,7 +80,7 @@ module.exports = (env, argv) => {
             {
               // Do not apply SVGR import in CSS files.
               issuer: /\.(css|scss|less)$/,
-              type: 'asset'
+              type: 'asset',
             },
             {
               issuer: /\.tsx?$/,
@@ -96,35 +96,35 @@ module.exports = (env, argv) => {
                     { prefixIds: false },
                     // leave "stroke"s and "fill"s alone
                     // https://github.com/svg/svgo/blob/master/plugins/removeUnknownsAndDefaults.js
-                    { removeUnknownsAndDefaults: { defaultAttrs: false } }
-                  ]
-                }
-              }
-            }
-          ]
-        }
-      ]
+                    { removeUnknownsAndDefaults: { defaultAttrs: false } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
     },
     resolve: {
-      extensions: [ '.ts', '.tsx', '.js' ]
+      extensions: [ '.ts', '.tsx', '.js' ],
     },
     stats: {
       // suppress "export not found" warnings about re-exported types
-      warningsFilter: /export .* was not found in/
+      warningsFilter: /export .* was not found in/,
     },
     plugins: [
       new ESLintPlugin({
         extensions: ['ts', 'tsx', 'js', 'jsx'],
       }),
       new MiniCssExtractPlugin({
-        filename: devMode ? "assets/[name].css" : "assets/[name].[contenthash].css"
+        filename: devMode ? 'assets/[name].css' : 'assets/[name].[contenthash].css',
       }),
       new HtmlWebpackPlugin({
         filename: 'index.html',
         template: 'src/index.html',
-        favicon: 'src/public/favicon.ico'
+        favicon: 'src/public/favicon.ico',
       }),
       new CleanWebpackPlugin(),
-    ]
+    ],
   };
 };
