@@ -104,13 +104,14 @@ module.exports = {
       }
     },
     { // helper files
-      files: ["**/setupTests.js", "**/webpack.config.js"],
+      files: ["**/webpack.config.js"],
       env: {
         node: true
       },
       rules: {
         "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-var-requires": "off"
+        "@typescript-eslint/no-var-requires": "off",
+        "quotes": ["error", "single", { allowTemplateLiterals: true, avoidEscape: true }],
       }
     }
   ]
