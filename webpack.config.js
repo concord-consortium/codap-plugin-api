@@ -55,12 +55,12 @@ module.exports = (env, argv) => {
                   // required for :import from scss files
                   // cf. https://github.com/webpack-contrib/css-loader#separating-interoperable-css-only-and-css-module-features
                   mode: 'icss',
-                },
-              },
+                }
+              }
             },
             'postcss-loader',
             'sass-loader',
-          ],
+          ]
         },
         {
           test: /\.(png|woff|woff2|eot|ttf)$/,
@@ -71,7 +71,7 @@ module.exports = (env, argv) => {
           loader: '@svgr/webpack',
           options: {
             svgo: false,
-          },
+          }
         },
         {
           test: /\.svg$/i,
@@ -105,16 +105,16 @@ module.exports = (env, argv) => {
                           // leave "stroke"s and "fill"s alone
                           // https://github.com/svg/svgo/blob/master/plugins/removeUnknownsAndDefaults.js
                           removeUnknownsAndDefaults: { defaultAttrs: false },
-                        },
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          ],
-        },
-      ],
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
     },
     resolve: {
       extensions: [ '.ts', '.tsx', '.js' ],
@@ -136,6 +136,6 @@ module.exports = (env, argv) => {
         favicon: 'src/public/favicon.ico',
       }),
       new CleanWebpackPlugin(),
-    ],
+    ]
   };
 };

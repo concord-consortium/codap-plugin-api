@@ -112,7 +112,6 @@ module.exports = {
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
         "quotes": ["error", "single", { allowTemplateLiterals: true, avoidEscape: true }],
-        "comma-dangle": ["error", "always-multiline"],
       }
     }
   ]
