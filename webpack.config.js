@@ -105,6 +105,8 @@ module.exports = (env, argv) => {
                           // leave "stroke"s and "fill"s alone
                           // https://github.com/svg/svgo/blob/master/plugins/removeUnknownsAndDefaults.js
                           removeUnknownsAndDefaults: { defaultAttrs: false },
+                          // leave viewBox alone
+                          removeViewBox: false
                         }
                       }
                     }
