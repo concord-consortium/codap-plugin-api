@@ -9,12 +9,8 @@ Deploying to S3 is handled by the [S3 Deploy Action](https://github.com/concord-
 - **branch builds**: when a developer pushes a branch, GitHub actions will build and deploy it to `starter-projects/branch/[branch-name]/index.html`. If the branch starts or ends with a number this is automatically stripped off and not included in the folder name.
 - **version builds**: when a developer pushes a tag, GitHub actions will build and deploy it to `starter-projects/version/[tag-name]/index.html`
 - **released version path**: the released version of the application is available at `starter-projects/index.html`
-- **master branch**: the master branch build is available at both `starter-projects/index-master.html` and `starter-projects/branch/master/index.html`.  The `index-master.html` form is preferred because it verifies the top level deployment is working for the current code.
+- **master branch**: the master branch build is available at both `starter-projects/index-master.html` and `starter-projects/branch/master/index.html`.  The `index-master.html` form is preferred because it verifies the top level deployment is working for the current code. Additional branches can be added to the top level by updating the `topBranches` configuration in `ci.yml`
 - **staging or other top level paths**: additional top level releases can be added so they are available at `starter-projects/index-[name].html`
-
-## How this differs from the branch based release approach
-- when updating the top level `starter-projects/index.html`, instead of using a branch that gets deployed to the top level, a version tag is  pushed, and then the version folder's `index-top.html` is copied to `starter-projects/index.html`. This change means that no javascript, css, or other assets are at the top level, just html files. This makes it easier to switch production versions, and it means we only need to copy files up to S3 instead of sync'ing them.
-- integration branches like `master` should be run from the top level so we can spot bugs caused by code that doesn't support the top level approach. For example the `starter-projects/index-master.html` should be used.  This file will be automatically updated each time master is pushed. Based on the configuration of `topBranches` in `ci.yml`.
 
 ## index-top.html
 
@@ -62,3 +58,10 @@ If you need to continue referencing files without using import, you can find the
 - **`build:top-test`** builds the project into the `top-test/specific/release` folder and copies `top-test/specific/release/index-top.html` to `top-test/index-top.html`.
 - **`serve:top-test`** starts a web server which is serving the `top-test` folder.
 
+## Benefits compared to previous branch based releases
+
+Previously we would do releases by updating a branch named `production`. This would build and deploy the application to the top level of the s3 folder.
+
+With this new approach a release is done by copying a single small html file from a version folder up to the top level. This means the javascript and css is not rebuilt just to promote a version. Therefore the exact build products can be tested before it is released. 
+
+Because deploying a version or branch only updates files within a folder specific to that version or branch, the utility used to copy files up to S3 can be more simple and efficient. In the previous model when the utility was uploading a production branch it would need to make sure to ignore the branch and version folders. Otherwise it might delete these folders because they aren't part of the upload. Even if the utility was configured to never delete files, it still needed to load the meta data of all of the files in the branch and version folders. It did this to know what has changed between local and remote. And S3's APIs don't support filtering listings of files other than a folder prefix. 
