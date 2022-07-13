@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Follow instructions in this guide to setup an S3 & Cloudfront distribution:
-# https://docs.google.com/document/d/1EacCSUhaHXaL8ll8xjcd4svyguEO-ipf5aF980-_q8
+# https://docs.google.com/document/d/1EacCSUhaHXaL8ll8xjcd4svyguEO-ipf5aF980-_q8E
 
 # Typically this is the Project name.
 # The trailing slash is important

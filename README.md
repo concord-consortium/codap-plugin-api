@@ -88,7 +88,7 @@ You *do not* need to build to deploy the code, that is automatic.  See more info
 ## Deployment
 
 Follow the instructions in this
-[Guide](https://docs.google.com/document/d/1EacCSUhaHXaL8ll8xjcd4svyguEO-ipf5aF980-_q8)
+[Guide](https://docs.google.com/document/d/1EacCSUhaHXaL8ll8xjcd4svyguEO-ipf5aF980-_q8E)
 to setup an S3 & Cloudfront distribution that can be used with Github actions.
 See also `s3_deploy.sh`, and `./github/ci.yml`.
 
