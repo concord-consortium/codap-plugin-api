@@ -88,7 +88,6 @@
     "autoprefixer": "^10.4.7",
     "caniuse-lite": "^1.0.30001366",
     "clean-webpack-plugin": "^4.0.0",
-    "copy-webpack-plugin": "^11.0.0",
     "css-loader": "^6.7.1",
     "cypress": "^9.7.0",
     "eslint": "^8.19.0",
