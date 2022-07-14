@@ -104,9 +104,7 @@ module.exports = {
         // require() can be useful in mocking
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
-        "jest/no-done-callback": "off",
-        // var is useful in mocking due to its hoisting semantics
-        "no-var": "off"
+        "jest/no-done-callback": "off"
       }
     },
     { // rules specific to Cypress tests
