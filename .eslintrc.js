@@ -10,6 +10,15 @@ module.exports = {
     es6: true
   },
   settings: {
+    "import/parsers": {
+      "@typescript-eslint/parser": [".ts", ".tsx"]
+    },
+    "import/resolver": {
+      typescript: {
+        alwaysTryTypes: true,
+        project: "."
+      }
+    },
     react: {
       pragma: "React",
       version: "detect"
@@ -22,6 +31,8 @@ module.exports = {
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
     "plugin:eslint-comments/recommended",
+    "plugin:import/recommended",
+    "plugin:import/typescript",
     "plugin:json/recommended",
     "plugin:react/recommended",
     "plugin:react-hooks/recommended"
@@ -35,21 +46,26 @@ module.exports = {
     "@typescript-eslint/no-shadow": ["error", { builtinGlobals: false, hoist: "all", allow: [] }],
     "@typescript-eslint/no-unused-vars": ["warn", { args: "none", ignoreRestSiblings: true }],
     "@typescript-eslint/prefer-optional-chain": "warn",
-    "@typescript-eslint/no-var-requires": "off",
+    "@typescript-eslint/semi": ["warn", "always"],
     "curly": ["error", "multi-line", "consistent"],
     "dot-notation": "error",
     "eol-last": "warn",
     "eqeqeq": ["error", "smart"],
-    "eslint-comments/no-unused-disable": "warn",
+    "eslint-comments/no-unused-disable": "off",   // enabled in .eslintrc.build.js
+    "import/no-cycle": "warn",
+    "import/no-extraneous-dependencies": "warn",
+    "import/no-useless-path-segments": "warn",
     "jsx-quotes": ["error", "prefer-double"],
+    "max-len": ["warn", { code: 120, ignoreUrls: true }],
+    "no-bitwise": "error",
     "no-debugger": "off",
     "no-duplicate-imports": "error",
     "no-sequences": "error",
-    "no-shadow": "off", // superceded by @typescript-eslint/no-shadow
+    "no-shadow": "off", // superseded by @typescript-eslint/no-shadow
     "no-tabs": "error",
     "no-unneeded-ternary": "error",
     "no-unused-expressions": ["error", { allowShortCircuit: true }],
-    "no-unused-vars": "off",  // superceded by @typescript-eslint/no-unused-vars
+    "no-unused-vars": "off",  // superseded by @typescript-eslint/no-unused-vars
     "no-useless-call": "error",
     "no-useless-concat": "error",
     "no-useless-rename": "error",
@@ -72,7 +88,7 @@ module.exports = {
     "react/no-unsafe": ["off", { checkAliases: true }],
     "react/no-unused-state": "error",
     "react/prop-types": "off",
-    "semi": ["error", "always"]
+    "semi": "off" // superseded by @typescript-eslint/semi
   },
   overrides: [
     { // rules specific to Jest tests
@@ -81,11 +97,13 @@ module.exports = {
         node: true,
         jest: true
       },
-      plugins: ["jest"],
-      extends: ["plugin:jest/recommended"],
+      plugins: ["jest", "testing-library"],
+      extends: ["plugin:jest/recommended", "plugin:testing-library/react"],
       rules: {
-        "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
+        // require() can be useful in mocking
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off",
         "jest/no-done-callback": "off"
       }
     },
@@ -100,10 +118,17 @@ module.exports = {
       rules: {
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
+        "@typescript-eslint/no-var-requires": "off",
         "cypress/no-unnecessary-waiting": "off"
       }
     },
-    { // helper files
+    { // eslint configs
+      files: [".eslintrc*.js"],
+      env: {
+        node: true
+      }
+    },
+    { // webpack configs
       files: ["**/webpack.config.js"],
       env: {
         node: true
