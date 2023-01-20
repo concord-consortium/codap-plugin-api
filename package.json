@@ -49,7 +49,7 @@
     "serve:top-test": "npx http-server top-test",
     "test": "jest",
     "test:all": "npm-run-all build test start",
-    "test:coverage": "jest --coverage --passWithNoTests",
+    "test:coverage": "jest --coverage",
     "test:debug": "node --nolazy --inspect-brk ./node_modules/.bin/jest --runInBand --no-cache",
     "test:watch": "jest --watch",
     "test:coverage:watch": "jest --coverage --watchAll",
