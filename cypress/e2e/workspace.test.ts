@@ -1,3 +1,5 @@
+import { AppElements as ae } from "../support/elements/app-elements"
+
 context("Test the overall app", () => {
   beforeEach(() => {
     cy.visit("");
@@ -5,7 +7,7 @@ context("Test the overall app", () => {
 
   describe("Desktop functionalities", () => {
     it("renders with text", () => {
-      cy.get(".app").should("have.text", "Hello World");
+      ae.getApp().should("have.text", "Hello World");
     });
   });
 });
