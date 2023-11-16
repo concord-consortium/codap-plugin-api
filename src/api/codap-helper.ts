@@ -7,8 +7,8 @@ export interface IItem {
 export function initializePlugin(pluginName: string, version: string, dimensions: {width: number, height: number}) {
   const interfaceConfig = {
     name: pluginName,
-    version: version,
-    dimensions: dimensions
+    version,
+    dimensions
   };
   return codapInterface.init(interfaceConfig);
 }
@@ -19,18 +19,18 @@ export function createDataContext(dataContextName: string) {
   // Determine if CODAP already has the Data Context we need.
   // If not, create it.
   return codapInterface.sendRequest({
-      action:'get',
+      action:"get",
       resource: dataSetString(dataContextName)
       }, function (result: { success: any; }) {
       if (result && !result.success) {
         codapInterface.sendRequest({
-          action: 'create',
-          resource: 'dataContext',
+          action: "create",
+          resource: "dataContext",
           values: {
             name: dataContextName,
             collections: [
               {
-                name: 'items',
+                name: "items",
                 labels: {
                   pluralCase: "items",
                   setOfCasesWithArticle: "an item"
@@ -47,10 +47,10 @@ export function createDataContext(dataContextName: string) {
 
 export function openTable() {
   codapInterface.sendRequest({
-    action: 'create',
-    resource: 'component',
+    action: "create",
+    resource: "component",
     values: {
-      type: 'caseTable'
+      type: "caseTable"
     }
   });
 }
@@ -58,7 +58,7 @@ export function openTable() {
 export function addData(dataContextName: string, data: number[]) {
   const values = data.map(d => ({value: d}));
   codapInterface.sendRequest({
-    action: 'create',
+    action: "create",
     resource: `${dataSetString(dataContextName)}.item`,
     values
   });
@@ -66,7 +66,7 @@ export function addData(dataContextName: string, data: number[]) {
 
 export function createItem(dataContextName: string, item: IItem) {
   codapInterface.sendRequest({
-    action: 'create',
+    action: "create",
     resource: `${dataSetString(dataContextName)}.item`,
     values: item
   });
@@ -75,5 +75,5 @@ export function createItem(dataContextName: string, item: IItem) {
 export function createItems(dataContextName: string, items: IItem[]) {
   items.forEach(item => {
     createItem(dataContextName, item);
-  })
+  });
 }

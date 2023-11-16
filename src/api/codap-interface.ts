@@ -41,17 +41,17 @@
  *
  */
 
-import { IframePhoneRpcEndpoint } from 'iframe-phone';
+import { IframePhoneRpcEndpoint } from "iframe-phone";
 
 /**
  * The CODAP Connection
  * @param {iframePhone.IframePhoneRpcEndpoint}
  */
-var connection: { call: (arg0: any, arg1: (response: any) => void) => void; } | null = null;
+let connection: { call: (arg0: any, arg1: (response: any) => void) => void; } | null = null;
 
-var connectionState = 'preinit';
+let connectionState = "preinit";
 
-var stats = {
+const stats = {
   countDiReq: 0,
   countDiRplSuccess: 0,
   countDiRplFail: 0,
@@ -77,7 +77,7 @@ export interface IConfig {
   preventDataContextReorg?: any;
 }
 
-var config: IConfig | null = null;
+let config: IConfig | null = null;
 
 /**
  * A serializable object shared with CODAP. This is saved as a part of the
@@ -89,47 +89,47 @@ var config: IConfig | null = null;
  * initiated by the init method if CODAP was started from a previously saved
  * document.
  */
-var interactiveState = {};
+let interactiveState = {};
 
 /**
  * A list of subscribers to messages from CODAP
  * @param {[{actionSpec: {RegExp}, resourceSpec: {RegExp}, handler: {function}}]}
  */
-var notificationSubscribers: { actionSpec: string; resourceSpec: any; operation: any; handler: any; }[] = [];
+const notificationSubscribers: { actionSpec: string; resourceSpec: any; operation: any; handler: any; }[] = [];
 
 function matchResource(resourceName: any, resourceSpec: string) {
-  return resourceSpec === '*' || resourceName === resourceSpec;
+  return resourceSpec === "*" || resourceName === resourceSpec;
 }
 
 function notificationHandler (request: { action: any; resource: any; values: any; }, callback: (arg0: { success: boolean; }) => void) {
-  var action = request.action;
-  var resource = request.resource;
-  var requestValues = request.values;
-  var returnMessage = {success: true};
+  const action = request.action;
+  const resource = request.resource;
+  let requestValues = request.values;
+  let returnMessage = {success: true};
 
-  connectionState = 'active';
+  connectionState = "active";
   stats.countCodapReq += 1;
   stats.timeCodapLastReq = new Date();
   if (!stats.timeCodapFirstReq) {
     stats.timeCodapFirstReq = stats.timeCodapLastReq;
   }
 
-  if (action === 'notify' && !Array.isArray(requestValues)) {
+  if (action === "notify" && !Array.isArray(requestValues)) {
     requestValues = [requestValues];
   }
 
-  var handled = false;
-  var success = true;
+  let handled = false;
+  let success = true;
 
-  if ((action === 'get') || (action === 'update')) {
+  if ((action === "get") || (action === "update")) {
     // get assumes only one subscriber because it expects only one response.
     notificationSubscribers.some(function (subscription) {
-      var result = false;
+      let result = false;
       try {
         if ((subscription.actionSpec === action) &&
             matchResource(resource, subscription.resourceSpec)) {
-          var rtn = subscription.handler(request);
-          if (rtn && rtn.success) { stats.countCodapRplSuccess++; } else{ stats.countCodapRplFail++; }
+          const rtn = subscription.handler(request);
+          if (rtn?.success) { stats.countCodapRplSuccess++; } else{ stats.countCodapRplFail++; }
           returnMessage = rtn;
           result = true;
         }
@@ -142,7 +142,7 @@ function notificationHandler (request: { action: any; resource: any; values: any
     if (!handled) {
       stats.countCodapUnhandledReq++;
     }
-  } else if (action === 'notify') {
+  } else if (action === "notify") {
     requestValues.forEach(function (value: { operation: any; }) {
       notificationSubscribers.forEach(function (subscription) {
         // pass this notification to matching subscriptions
@@ -150,9 +150,9 @@ function notificationHandler (request: { action: any; resource: any; values: any
         if ((subscription.actionSpec === action) && matchResource(resource,
                 subscription.resourceSpec) && (!subscription.operation ||
             (subscription.operation === value.operation) && subscription.handler)) {
-          var rtn = subscription.handler(
-              {action: action, resource: resource, values: value});
-          if (rtn && rtn.success) { stats.countCodapRplSuccess++; } else{ stats.countCodapRplFail++; }
+          const rtn = subscription.handler(
+              {action, resource, values: value});
+          if (rtn?.success) { stats.countCodapRplSuccess++; } else{ stats.countCodapRplFail++; }
           success = (success && (rtn ? rtn.success : false));
           handled = true;
         }
@@ -171,7 +171,7 @@ export const codapInterface = {
   /**
    * Connection statistics
    */
-  stats: stats,
+  stats,
 
   /**
    * Initialize connection.
@@ -186,13 +186,13 @@ export const codapInterface = {
    * @param iCallback {function(interactiveState)}
    * @return {Promise} Promise of interactiveState;
    */
-  init: function (iConfig: IConfig, iCallback?: (arg0: any) => void) {
-    var this_ = this;
+  init (iConfig: IConfig, iCallback?: (arg0: any) => void) {
+    const this_ = this;
     return new Promise(function (resolve: (arg0: any) => void, reject: { (arg0: string): void; (arg0: any): void; }) {
       function getFrameRespHandler(resp: { values: { error: any; savedState: any }; success: boolean }[]) {
-        var success = resp && resp[1] && resp[1].success;
-        var receivedFrame = success && resp[1].values;
-        var savedState = receivedFrame && receivedFrame.savedState;
+        const success = resp && resp[1] && resp[1].success;
+        const receivedFrame = success && resp[1].values;
+        const savedState = receivedFrame && receivedFrame.savedState;
         this_.updateInteractiveState(savedState);
         if (success) {
           // deprecated way of conveying state
@@ -202,11 +202,11 @@ export const codapInterface = {
           resolve(savedState);
         } else {
           if (!resp) {
-            reject('Connection request to CODAP timed out.');
+            reject("Connection request to CODAP timed out.");
           } else {
             reject(
                 (resp[1] && resp[1].values && resp[1].values.error) ||
-                'unknown failure');
+                "unknown failure");
           }
         }
         if (iCallback) {
@@ -214,8 +214,8 @@ export const codapInterface = {
         }
       }
 
-      var getFrameReq = {action: 'get', resource: 'interactiveFrame'};
-      var newFrame = {
+      const getFrameReq = {action: "get", resource: "interactiveFrame"};
+      const newFrame = {
         name: iConfig.name,
         title: iConfig.title,
         version: iConfig.version,
@@ -223,9 +223,9 @@ export const codapInterface = {
         preventBringToFront: iConfig.preventBringToFront,
         preventDataContextReorg: iConfig.preventDataContextReorg
       };
-      var updateFrameReq = {
-        action: 'update',
-        resource: 'interactiveFrame',
+      const updateFrameReq = {
+        action: "update",
+        resource: "interactiveFrame",
         values: newFrame
       };
 
@@ -236,7 +236,7 @@ export const codapInterface = {
           notificationHandler, "data-interactive", window.parent);
 
       if (!config.customInteractiveStateHandler) {
-        this_.on('get', 'interactiveState', function () {
+        this_.on("get", "interactiveState", function () {
           return ({success: true, values: this_.getInteractiveState()});
         }.bind(this_));
       }
@@ -252,13 +252,13 @@ export const codapInterface = {
    * Current known state of the connection
    * @param {'preinit' || 'init' || 'active' || 'inactive' || 'closed'}
    */
-  getConnectionState: function () {return connectionState;},
+  getConnectionState () {return connectionState;},
 
-  getStats: function () {
+  getStats () {
     return stats;
   },
 
-  getConfig: function () {
+  getConfig () {
     return config;
   },
 
@@ -267,7 +267,7 @@ export const codapInterface = {
    *
    * @returns {object}
    */
-  getInteractiveState: function () {
+  getInteractiveState () {
     return interactiveState;
   },
 
@@ -275,14 +275,14 @@ export const codapInterface = {
    * Updates the interactive state.
    * @param iInteractiveState {Object}
    */
-  updateInteractiveState: function (iInteractiveState: any) {
+  updateInteractiveState (iInteractiveState: any) {
     if (!iInteractiveState) {
       return;
     }
     interactiveState = Object.assign(interactiveState, iInteractiveState);
   },
 
-  destroy: function () {
+  destroy () {
     // todo : more to do?
     connection = null;
   },
@@ -298,28 +298,28 @@ export const codapInterface = {
    *
    * @return {Promise} The promise of the response from CODAP.
    */
-  sendRequest: function (message: any, callback?: any) {
+  sendRequest (message: any, callback?: any) {
     return new Promise(function (resolve, reject){
-      function handleResponse (request: any, response: {success: boolean} | undefined, callback: (arg0: any, arg1: any) => void) {
+      function handleResponse (request: any, response: {success: boolean} | undefined, cb: (arg0: any, arg1: any) => void) {
         if (response === undefined) {
           // console.warn('handleResponse: CODAP request timed out');
-          reject('handleResponse: CODAP request timed out: ' + JSON.stringify(request));
+          reject("handleResponse: CODAP request timed out: " + JSON.stringify(request));
           stats.countDiRplTimeout++;
         } else {
-          connectionState = 'active';
+          connectionState = "active";
           if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
           resolve(response);
         }
-        if (callback) {
-          callback(response, request);
+        if (cb) {
+          cb(response, request);
         }
       }
       switch (connectionState) {
-        case 'closed': // log the message and ignore
+        case "closed": // log the message and ignore
           // console.warn('sendRequest on closed CODAP connection: ' + JSON.stringify(message));
-          reject('sendRequest on closed CODAP connection: ' + JSON.stringify(message));
+          reject("sendRequest on closed CODAP connection: " + JSON.stringify(message));
           break;
-        case 'preinit': // warn, but issue request.
+        case "preinit": // warn, but issue request.
           // console.log('sendRequest on not yet initialized CODAP connection: ' +
               // JSON.stringify(message));
           /* falls through */
@@ -351,17 +351,17 @@ export const codapInterface = {
    *   'move', 'resize', .... If not specified, all operations will be reported.
    * @param handler {Function} A handler to receive the notifications.
    */
-  on: function (actionSpec: string, resourceSpec: string, operation: string | (() => void), handler?: () => void) {
-    var as = 'notify',
+  on (actionSpec: string, resourceSpec: string, operation: string | (() => void), handler?: () => void) {
+    let as = "notify",
         rs,
         os,
         hn;
-    var args = Array.prototype.slice.call(arguments);
-    if (['get', 'update', 'notify'].indexOf(args[0]) >= 0) {
+    const args = Array.prototype.slice.call(arguments);
+    if (["get", "update", "notify"].indexOf(args[0]) >= 0) {
       as = args.shift();
     }
     rs = args.shift();
-    if (typeof args[0] !== 'function') {
+    if (typeof args[0] !== "function") {
       os = args.shift();
     }
     hn = args.shift();
@@ -385,13 +385,13 @@ export const codapInterface = {
    * @param {String} iResource
    * @return {Object}
    */
-  parseResourceSelector: function (iResource: string) {
-    var selectorRE = /([A-Za-z0-9_-]+)\[([^\]]+)]/;
-    var result: any = {};
-    var selectors = iResource.split('.');
+  parseResourceSelector (iResource: string) {
+    const selectorRE = /([A-Za-z0-9_-]+)\[([^\]]+)]/;
+    const result: any = {};
+    const selectors = iResource.split(".");
     selectors.forEach(function (selector: string) {
-      var resourceType, resourceName;
-      var match = selectorRE.exec(selector);
+      let resourceType, resourceName;
+      const match = selectorRE.exec(selector);
       if (selectorRE.test(selector) && match) {
         resourceType = match[1];
         resourceName = match[2];

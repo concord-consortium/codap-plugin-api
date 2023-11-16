@@ -1,1 +1,1 @@
-declare module 'iframe-phone';
+declare module "iframe-phone";
