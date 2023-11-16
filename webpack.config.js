@@ -3,8 +3,8 @@
 module.exports = (env, argv) => {
   return {
     context: __dirname, // to automatically find tsconfig.json
-    devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
-    entry: './src/codap-plugin-api.tsx',
+    devtool: 'source-map',
+    entry: './src/codap-plugin-api.ts',
     mode: 'development',
     output: {
       filename: 'codap-plugin-api.js',
