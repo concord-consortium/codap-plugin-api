@@ -132,6 +132,10 @@ export const createDataContext = (dataContextName: string) => {
   );
 };
 
+export const createDataContextFromURL = (url: string) => {
+  return sendMessage("create", "dataContextFromURL", {"URL": url});
+};
+
 export const addDataContextsListListener = (callback: ClientHandler) => {
   codapInterface.on("notify", "documentChangeNotice", callback);
 };
