@@ -27,10 +27,6 @@ module.exports = (env, argv) => {
       // suppress "export not found" warnings about re-exported types
       warningsFilter: /export .* was not found in/,
     },
-    plugins: [],
-    externals: {
-      'react': 'react',
-      'react-dom': 'ReactDOM'
-    }
+    plugins: []
   };
 };
