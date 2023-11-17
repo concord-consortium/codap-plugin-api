@@ -57,7 +57,7 @@ module.exports = {
     "import/no-extraneous-dependencies": "warn",
     "import/no-useless-path-segments": "warn",
     "jsx-quotes": ["error", "prefer-double"],
-    "max-len": ["warn", { code: 120, ignoreUrls: true }],
+    "max-len": ["off", { code: 120, ignoreUrls: true }],
     "no-bitwise": "error",
     "no-debugger": "off",
     "no-duplicate-imports": "error",
