@@ -1,27 +1,18 @@
 import {ClientHandler, codapInterface} from "./codap-interface";
-import { Attribute, DataContext } from "./types";
-
+import { Action, Attribute, CodapItemValues, CodapItem, DataContext } from "./types";
 interface IDimensions {
   width: number;
   height: number;
 }
 
-export interface IItem {
-  [key: string]: string|number;
+export interface IInitializePlugin {
+  pluginName: string;
+  version: string;
+  dimensions: IDimensions;
 }
-
 export interface IResult {
   success: boolean;
   values: any;
-}
-
-export interface IValues {
-  [key: string]: any;
-}
-
-interface ICaseValues {
-  id: number;
-  values: IValues;
 }
 
 ////////////// internal helper functions //////////////
@@ -37,7 +28,7 @@ const createMessage = (action: string, resource: string, values?: any) => {
   };
 };
 
-const sendMessage = (action: string, resource: string, values?: IValues) => {
+const sendMessage = (action: Action, resource: string, values?: CodapItemValues) => {
   const message = createMessage(action, resource, values);
   return new Promise((resolve, reject) => {
     codapInterface.sendRequest(message, (result: IResult) => {
@@ -46,7 +37,7 @@ const sendMessage = (action: string, resource: string, values?: IValues) => {
       } else if (result?.success) {
         resolve(result.values);
       } else {
-        const error_message = (result?.values?.error) || "unknown error";
+        const error_message = (result?.values?.error) ?? "unknown error";
         reject(error_message);
       }
     });
@@ -55,7 +46,8 @@ const sendMessage = (action: string, resource: string, values?: IValues) => {
 
 ////////////// public API //////////////
 
-export const initializePlugin = (pluginName: string, version: string, dimensions: IDimensions) => {
+export const initializePlugin = (options: IInitializePlugin) => {
+  const { pluginName, version, dimensions } = options;
   const interfaceConfig = {
     name: pluginName,
     version,
@@ -66,7 +58,7 @@ export const initializePlugin = (pluginName: string, version: string, dimensions
 
 ////////////// component functions //////////////
 
-export const openTable = () => {
+export const createTable = () => {
   codapInterface.sendRequest({
     action: "create",
     resource: "component",
@@ -78,7 +70,6 @@ export const openTable = () => {
 
 // Selects this component. In CODAP this will bring this component to the front.
 export const selectSelf = () => {
-  let myCODAPId = null;
 
   const selectComponent = async function (id: number) {
     return codapInterface.sendRequest({
@@ -92,14 +83,11 @@ export const selectSelf = () => {
     });
   };
 
-  if (myCODAPId == null) {
-    codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result: IResult) => {
-      if (result.success) {
-        myCODAPId = result.values.id;
-        return selectComponent(myCODAPId);
-      }
-    });
-  }
+  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result: IResult) => {
+    if (result.success) {
+      return selectComponent(result.values.id);
+    }
+  });
 };
 
 ////////////// data context functions //////////////
@@ -157,7 +145,7 @@ export const getCollection = (dataContextName: string, collectionName: string) =
 export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
-  const values: IValues = {
+  const values: CodapItemValues = {
     "name": collectionName,
     "title": collectionName,
     "parent": "_root_"
@@ -173,7 +161,7 @@ export const createParentCollection = (dataContextName: string, collectionName: 
 export const createChildCollection = (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
-  const values: IValues = {
+  const values: CodapItemValues = {
     "name": collectionName,
     "title": collectionName,
     "parent": parentCollectionName
@@ -189,7 +177,7 @@ export const createChildCollection = (dataContextName: string, collectionName: s
 export const createNewCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) =>  {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
-  const values: IValues = {
+  const values: CodapItemValues = {
     "name": collectionName,
     "title": collectionName,
   };
@@ -236,14 +224,14 @@ export const getAttributeList = (dataContextName: string, collectionName: string
 
 export const createNewAttribute = (dataContextName: string, collectionName: string, attributeName: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute`;
-  const values: IValues = {
+  const values: CodapItemValues = {
     "name": attributeName,
     "title": attributeName,
   };
   return sendMessage("create", resource, values);
 };
 
-export const updateAttribute = (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: IValues) => {
+export const updateAttribute = (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute[${attributeName}]`;
   return sendMessage("update", resource, values);
 };
@@ -331,12 +319,12 @@ export const getCaseByFormulaSearch = (dataContextName: string, collectionName: 
   return sendMessage("get", resource);
 };
 
-export const createSingleOrParentCase = (dataContextName: string, collectionName: string, values: Array<IValues>) => {
+export const createSingleOrParentCase = (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
   return sendMessage("create", resource, values);
 };
 
-export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number | string, values: IValues) => {
+export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
   const valuesWithParent = [
     {
@@ -347,7 +335,7 @@ export const createChildCase = (dataContextName: string, collectionName: string,
   return sendMessage("create", resource, valuesWithParent);
 };
 
-export const updateCaseById = (dataContextName: string, caseID: number | string, values: IValues) => {
+export const updateCaseById = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
   const updateValues = {
     values
@@ -355,7 +343,7 @@ export const updateCaseById = (dataContextName: string, caseID: number | string,
   return sendMessage("update", resource, updateValues);
 };
 
-export const updateCases = (dataContextName: string, collectionName: string, values: ICaseValues[]) => {
+export const updateCases = (dataContextName: string, collectionName: string, values: CodapItem[]) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
   return sendMessage("update", resource, values);
 };
@@ -390,18 +378,18 @@ export const getItemBySearch = (dataContextName: string, search: string) => {
   return sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[${search}]`);
 };
 
-export const createItems = (dataContextName: string, items: Array<IItem>) => {
+export const createItems = (dataContextName: string, items: Array<CodapItemValues>) => {
   return sendMessage("create", `${ctxStr(dataContextName)}.item`, items);
 };
 
-export const updateItemByID = (dataContextName: string, itemID: number | string, values: IValues) => {
+export const updateItemByID = (dataContextName: string, itemID: number | string, values: CodapItemValues) => {
   return sendMessage("update", `${ctxStr(dataContextName)}.itemByID[${itemID}]`, values);
 };
 
-export const updateItemByIndex = (dataContextName: string, index: number, values: IValues) => {
+export const updateItemByIndex = (dataContextName: string, index: number, values: CodapItemValues) => {
   return sendMessage("update", `${ctxStr(dataContextName)}.item[${index}]`, values);
 };
 
-export const updateItemByCaseID = (dataContextName: string, caseID: number | string, values: IValues) => {
+export const updateItemByCaseID = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
   return sendMessage("update", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`, values);
 };

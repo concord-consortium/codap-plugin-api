@@ -46,3 +46,5 @@ export interface CodapItem {
   id: string;
   values: CodapItemValues;
 }
+
+export type Action = "create" | "get" | "update" | "delete";
