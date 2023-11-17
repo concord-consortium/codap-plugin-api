@@ -1,4 +1,5 @@
-import {codapInterface} from "./codap-interface";
+import {ClientHandler, codapInterface} from "./codap-interface";
+import { Attribute, DataContext } from "./types";
 
 interface IDimensions {
   width: number;
@@ -16,25 +17,6 @@ export interface IResult {
 
 export interface IValues {
   [key: string]: any;
-}
-
-export interface IAttributeDefinition {
-  name: string;
-  title?: string;
-  description?: string;
-  type?: string;
-  formula?: string;
-  editable?: boolean;
-  hidden?: boolean;
-  precision?: number;
-  unit?: string;
-  defaultMin?: number;
-  defaultMax?: number;
-  defaultMode?: string;
-  defaultTableMode?: string;
-  colormap?: string;
-  categories?: string[];
-
 }
 
 const ctxStr = (contextName: string) => `dataContext[${contextName}]`;
@@ -160,7 +142,7 @@ export const updateAttributePosition = (dataContextName: string, collectionName:
   });
 };
 
-export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: IAttributeDefinition[]) => {
+export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: IValues = {
@@ -176,7 +158,7 @@ export const createParentCollection = (dataContextName: string, collectionName: 
   return sendMessage("create", resource, values);
 };
 
-export const createChildCollection = (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: IAttributeDefinition[]) => {
+export const createChildCollection = (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: IValues = {
@@ -192,7 +174,7 @@ export const createChildCollection = (dataContextName: string, collectionName: s
   return sendMessage("create", resource, values);
 };
 
-export const createNewCollection = (dataContextName: string, collectionName: string, attrs?: IAttributeDefinition[]) =>  {
+export const createNewCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) =>  {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: IValues = {
@@ -228,7 +210,7 @@ export const ensureUniqueCollectionName = (dataContextName: string, collectionNa
   });
 };
 
-export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: IAttributeDefinition, parent: string) => {
+export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: string) => {
   // check if a collection for the attribute already exists
   const getCollection = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
 
@@ -320,22 +302,10 @@ export const selectCases = (dataContextName: string, caseIds: string[]) => {
   return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
 };
 
-// static addDataContextsListListener(callback: ClientHandler) {
-//   codapInterface.on("notify", "documentChangeNotice", callback);
-// }
+export const addDataContextsListListener = (callback: ClientHandler) => {
+  codapInterface.on("notify", "documentChangeNotice", callback);
+};
 
-// static addDataContextChangeListener(context: DataContext, callback: ClientHandler) {
-//   codapInterface.on("notify", `dataContextChangeNotice[${context.name}]`, callback);
-// }
-
-// static async addCollections(dataContextName: string, collections: Collection[]) {
-//   const result = await codapInterface.sendRequest({
-//     action: "create",
-//     resource: dataContextResource(dataContextName, "collection"),
-//     values: collections
-//   }) as CodapRequestResponse;
-//   return result && result.success ? result.values : null;
-// }
-
-// update item
-// remove item
+export const addDataContextChangeListener = (context: DataContext, callback: ClientHandler) => {
+  codapInterface.on("notify", `dataContextChangeNotice[${context.name}]`, callback);
+};
