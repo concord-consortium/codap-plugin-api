@@ -101,23 +101,9 @@ export const getDataContext = (dataContextName: string) => {
 };
 
 export const createDataContext = (dataContextName: string) => {
-  // Determine if CODAP already has the Data Context we need.
-  // If not, create it.
-  return codapInterface.sendRequest({
-      action:"get",
-      resource: ctxStr(dataContextName)
-      }, function (result: { success: any; }) {
-      if (result && !result.success) {
-        codapInterface.sendRequest({
-          action: "create",
-          resource: "dataContext",
-          values: {
-            name: dataContextName
-          }
-        });
-      }
-    }
-  );
+  return sendMessage("create", "dataContext", {
+    name: dataContextName
+  });
 };
 
 export const createDataContextFromURL = (url: string) => {
