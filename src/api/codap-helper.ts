@@ -183,13 +183,13 @@ export const ensureUniqueCollectionName = (dataContextName: string, collectionNa
     "resource": `${ctxStr(dataContextName)}.collection[${uniqueName}]`
   };
 
-  return codapInterface.sendRequest(getCollMessage, (result: IResult) => {
+  return codapInterface.sendRequest(getCollMessage, async (result: IResult) => {
     if (result.success) {
       // guard against run away loops
       if (index >= 100) {
         return undefined;
       }
-      return ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
+      return await ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
     } else {
       return uniqueName;
     }
@@ -234,11 +234,11 @@ export const createCollectionFromAttribute = (dataContextName: string, oldCollec
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
 
-  return codapInterface.sendRequest(getCollectionMessage, (result: IResult) => {
+  return codapInterface.sendRequest(getCollectionMessage, async (result: IResult) => {
     // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
     // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
     const moveCollection = result.success;
-    const newCollectionName = moveCollection ? ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
+    const newCollectionName = moveCollection ? await ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
     if (newCollectionName === undefined) {
       return;
     }
