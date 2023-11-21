@@ -101,8 +101,19 @@ export const getDataContext = (dataContextName: string) => {
 };
 
 export const createDataContext = (dataContextName: string) => {
-  return sendMessage("create", "dataContext", {
-    name: dataContextName
+  return codapInterface.sendRequest({
+    action:"get",
+    resource: ctxStr(dataContextName)
+    }, function (result: { success: any; }) {
+    if (result && !result.success) {
+      codapInterface.sendRequest({
+        action: "create",
+        resource: "dataContext",
+        values: {
+          name: dataContextName
+        }
+      });
+    }
   });
 };
 
