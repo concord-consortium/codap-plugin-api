@@ -11,11 +11,10 @@ In the directory of your plugin project, run `npm install codap-plugin-api`.
 In myComponent.js:
 
 ```
-import codapInterface from "codap-plugin-api"
-import codapHelpers from "codap-plugin-api"
+import codapInterface from "codap-plugin-api";
+import codapHelpers from "codap-plugin-api";
 
 const myComponent = () => {
-
   useEffect(() => {
     const myOptions = {
       pluginName: myPlugin;
@@ -26,7 +25,7 @@ const myComponent = () => {
       };
     }
     codapHelpers.initializePlugin(myOptions);
-  }, [])
+  }, []);
 }
 ```
 
