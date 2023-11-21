@@ -25,7 +25,7 @@ const myComponent = () => {
         height: 400
       };
     }
-    codapHelpers.initializePlugin();
+    codapHelpers.initializePlugin(myOptions);
   }, [])
 }
 ```
