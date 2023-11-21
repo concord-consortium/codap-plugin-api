@@ -78,6 +78,7 @@ export const selectSelf = () => {
       values: {request: "select"}
     }, (result: IResult) => {
       if (!result.success) {
+        // eslint-disable-next-line no-console
         console.log("selectSelf failed");
       }
     });
