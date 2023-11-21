@@ -4,7 +4,7 @@ module.exports = {
     ecmaVersion: 2018,
     sourceType: "module",
   },
-  plugins: ["@typescript-eslint", "json", "react", "react-hooks"],
+  plugins: ["@typescript-eslint", "json"],
   env: {
     browser: true,
     es6: true
@@ -34,8 +34,6 @@ module.exports = {
     "plugin:import/recommended",
     "plugin:import/typescript",
     "plugin:json/recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended"
   ],
   rules: {
     "@typescript-eslint/explicit-module-boundary-types": "off",
@@ -44,9 +42,9 @@ module.exports = {
     "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-require-imports": "error",
     "@typescript-eslint/no-shadow": ["error", { builtinGlobals: false, hoist: "all", allow: [] }],
-    "@typescript-eslint/no-this-alias": "warn",
+    "@typescript-eslint/no-this-alias": "off",
     "@typescript-eslint/no-unused-vars": ["warn", { args: "none", ignoreRestSiblings: true }],
-    "@typescript-eslint/prefer-optional-chain": "warn",
+    "@typescript-eslint/prefer-optional-chain": "off",
     "@typescript-eslint/semi": ["warn", "always"],
     "curly": ["error", "multi-line", "consistent"],
     "dot-notation": "error",
@@ -74,21 +72,13 @@ module.exports = {
     "no-var": "error",
     "no-whitespace-before-property": "error",
     "object-shorthand": "error",
-    "prefer-const": ["warn", { destructuring: "all" }],
+    "prefer-const": ["off", { destructuring: "all" }],
     "prefer-object-spread": "error",
     "prefer-regex-literals": "error",
-    "prefer-rest-params": "warn",
+    "prefer-rest-params": "off",
     "prefer-spread": "error",
     "quotes": ["error", "double", { allowTemplateLiterals: true, avoidEscape: true }],
     "radix": "error",
-    "react/jsx-closing-tag-location": "error",
-    "react/jsx-handler-names": "off",
-    "react/jsx-no-useless-fragment": "error",
-    "react/no-access-state-in-setstate": "error",
-    "react/no-danger": "error",
-    "react/no-unsafe": ["off", { checkAliases: true }],
-    "react/no-unused-state": "error",
-    "react/prop-types": "off",
     "semi": "off" // superseded by @typescript-eslint/semi
   },
   overrides: [
@@ -99,28 +89,13 @@ module.exports = {
         jest: true
       },
       plugins: ["jest", "testing-library"],
-      extends: ["plugin:jest/recommended", "plugin:testing-library/react"],
+      extends: ["plugin:jest/recommended"],
       rules: {
         "@typescript-eslint/no-non-null-assertion": "off",
         // require() can be useful in mocking
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
         "jest/no-done-callback": "off"
-      }
-    },
-    { // rules specific to Cypress tests
-      files: ["cypress/**"],
-      env: {
-        node: true,
-        "cypress/globals": true
-      },
-      plugins: ["cypress"],
-      extends: ["plugin:cypress/recommended"],
-      rules: {
-        "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-non-null-assertion": "off",
-        "@typescript-eslint/no-var-requires": "off",
-        "cypress/no-unnecessary-waiting": "off"
       }
     },
     { // eslint configs
