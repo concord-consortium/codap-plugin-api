@@ -1,2 +1,2 @@
 export {IConfig, codapInterface} from "./api/codap-interface";
-export {initializePlugin, createDataContext, openTable, addData, createItem, createItems} from "./api/codap-helper";
+export * as codapHelpers from "./api/codap-helper";

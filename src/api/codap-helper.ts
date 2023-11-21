@@ -1,51 +1,64 @@
-import {codapInterface} from "./codap-interface";
-
-export interface IItem {
-  [key: string]: string|number;
+import {ClientHandler, codapInterface} from "./codap-interface";
+import { Action, Attribute, CodapItemValues, CodapItem, DataContext } from "./types";
+interface IDimensions {
+  width: number;
+  height: number;
 }
 
-export function initializePlugin(pluginName: string, version: string, dimensions: {width: number, height: number}) {
+export interface IInitializePlugin {
+  pluginName: string;
+  version: string;
+  dimensions: IDimensions;
+}
+export interface IResult {
+  success: boolean;
+  values: any;
+}
+
+////////////// internal helper functions //////////////
+
+const ctxStr = (contextName: string) => `dataContext[${contextName}]`;
+const collStr = (collectionName: string) => `collection${collectionName}`;
+
+const createMessage = (action: string, resource: string, values?: any) => {
+  return {
+    action,
+    resource,
+    values
+  };
+};
+
+const sendMessage = (action: Action, resource: string, values?: CodapItemValues) => {
+  const message = createMessage(action, resource, values);
+  return new Promise((resolve, reject) => {
+    codapInterface.sendRequest(message, (result: IResult) => {
+      if (!result) {
+        reject("Request timeout");
+      } else if (result?.success) {
+        resolve(result.values);
+      } else {
+        const error_message = (result?.values?.error) ?? "unknown error";
+        reject(error_message);
+      }
+    });
+  });
+};
+
+////////////// public API //////////////
+
+export const initializePlugin = (options: IInitializePlugin) => {
+  const { pluginName, version, dimensions } = options;
   const interfaceConfig = {
     name: pluginName,
     version,
     dimensions
   };
   return codapInterface.init(interfaceConfig);
-}
+};
 
-const dataSetString = (contextName: string) => `dataContext[${contextName}]`;
+////////////// component functions //////////////
 
-export function createDataContext(dataContextName: string) {
-  // Determine if CODAP already has the Data Context we need.
-  // If not, create it.
-  return codapInterface.sendRequest({
-      action:"get",
-      resource: dataSetString(dataContextName)
-      }, function (result: { success: any; }) {
-      if (result && !result.success) {
-        codapInterface.sendRequest({
-          action: "create",
-          resource: "dataContext",
-          values: {
-            name: dataContextName,
-            collections: [
-              {
-                name: "items",
-                labels: {
-                  pluralCase: "items",
-                  setOfCasesWithArticle: "an item"
-                },
-                attrs: [{name: "value"}]
-              }
-            ]
-          }
-        });
-      }
-    }
-  );
-}
-
-export function openTable() {
+export const createTable = () => {
   codapInterface.sendRequest({
     action: "create",
     resource: "component",
@@ -53,27 +66,316 @@ export function openTable() {
       type: "caseTable"
     }
   });
-}
+};
 
-export function addData(dataContextName: string, data: number[]) {
-  const values = data.map(d => ({value: d}));
-  codapInterface.sendRequest({
-    action: "create",
-    resource: `${dataSetString(dataContextName)}.item`,
+// Selects this component. In CODAP this will bring this component to the front.
+export const selectSelf = () => {
+
+  const selectComponent = async function (id: number) {
+    return codapInterface.sendRequest({
+      action: "notify",
+      resource:  `component[${id}]`,
+      values: {request: "select"}
+    }, (result: IResult) => {
+      if (!result.success) {
+        console.log("selectSelf failed");
+      }
+    });
+  };
+
+  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result: IResult) => {
+    if (result.success) {
+      return selectComponent(result.values.id);
+    }
+  });
+};
+
+////////////// data context functions //////////////
+
+export const getListOfDataContexts = () => {
+  return sendMessage("get", "dataContextList");
+};
+
+export const getDataContext = (dataContextName: string) => {
+  return sendMessage("get", ctxStr(dataContextName));
+};
+
+export const createDataContext = (dataContextName: string) => {
+  return sendMessage("create", "dataContext", {
+    name: dataContextName
+  });
+};
+
+export const createDataContextFromURL = (url: string) => {
+  return sendMessage("create", "dataContextFromURL", {"URL": url});
+};
+
+export const addDataContextsListListener = (callback: ClientHandler) => {
+  codapInterface.on("notify", "documentChangeNotice", callback);
+};
+
+export const addDataContextChangeListener = (context: DataContext, callback: ClientHandler) => {
+  codapInterface.on("notify", `dataContextChangeNotice[${context.name}]`, callback);
+};
+
+////////////// collection functions //////////////
+
+export const getCollectionList = (dataContextName: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.collectionList`);
+};
+
+export const getCollection = (dataContextName: string, collectionName: string) => {
+ return sendMessage("get", `${ctxStr(dataContextName)}.${collStr(collectionName)}`);
+};
+
+export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
+  const resource = `${ctxStr(dataContextName)}.collection`;
+
+  const values: CodapItemValues = {
+    "name": collectionName,
+    "title": collectionName,
+    "parent": "_root_"
+  };
+
+  if (attrs) {
+    values.attrs = attrs;
+  }
+
+  return sendMessage("create", resource, values);
+};
+
+export const createChildCollection = (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => {
+  const resource = `${ctxStr(dataContextName)}.collection`;
+
+  const values: CodapItemValues = {
+    "name": collectionName,
+    "title": collectionName,
+    "parent": parentCollectionName
+  };
+
+  if (attrs) {
+    values.attrs = attrs;
+  }
+
+  return sendMessage("create", resource, values);
+};
+
+export const createNewCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) =>  {
+  const resource = `${ctxStr(dataContextName)}.collection`;
+
+  const values: CodapItemValues = {
+    "name": collectionName,
+    "title": collectionName,
+  };
+
+  if (attrs) {
+    values.attrs = attrs;
+  }
+
+  return sendMessage("create", resource, values);
+};
+
+export const ensureUniqueCollectionName = (dataContextName: string, collectionName: string, index: number) => {
+  index = index || 0;
+  const uniqueName = `${collectionName}${index ? index : ""}`;
+  const getCollMessage = {
+    "action": "get",
+    "resource": `${ctxStr(dataContextName)}.collection[${uniqueName}]`
+  };
+
+  return codapInterface.sendRequest(getCollMessage, async (result: IResult) => {
+    if (result.success) {
+      // guard against run away loops
+      if (index >= 100) {
+        return undefined;
+      }
+      return await ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
+    } else {
+      return uniqueName;
+    }
+  });
+};
+
+////////////// attribute functions //////////////
+
+export const getAttribute = (dataContextName: string, collectionName: string, attributeName: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute[${attributeName}]`;
+  return sendMessage("get", resource);
+};
+
+export const getAttributeList = (dataContextName: string, collectionName: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attributeList`;
+  return sendMessage("get", resource);
+};
+
+export const createNewAttribute = (dataContextName: string, collectionName: string, attributeName: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute`;
+  const values: CodapItemValues = {
+    "name": attributeName,
+    "title": attributeName,
+  };
+  return sendMessage("create", resource, values);
+};
+
+export const updateAttribute = (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute[${attributeName}]`;
+  return sendMessage("update", resource, values);
+};
+
+export const updateAttributePosition = (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attributeLocation[${attrName}]`;
+  return sendMessage("update", resource, {
+    "collection": collectionName,
+    "position": newPosition
+  });
+};
+
+export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: string) => {
+  // check if a collection for the attribute already exists
+  const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
+
+  return codapInterface.sendRequest(getCollectionMessage, async (result: IResult) => {
+    // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
+    // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
+    const moveCollection = result.success;
+    const newCollectionName = moveCollection ? await ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
+    if (newCollectionName === undefined) {
+      return;
+    }
+
+    const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
+      "name": newCollectionName,
+      "title": newCollectionName,
+      parent,
+    });
+
+    return codapInterface.sendRequest(createCollectionRequest, (createCollResult: IResult) => {
+      if (createCollResult.success) {
+        const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
+          "collection": newCollectionName,
+          "position": 0
+        });
+        return codapInterface.sendRequest(moveAttributeRequest, (moveAttrResult: IResult) => {
+          if (moveAttrResult.success) {
+            if (moveCollection) {
+              // check if the old collection has been
+              const getAttributeListRequest = createMessage("get", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeList`);
+              return codapInterface.sendRequest(getAttributeListRequest, (getAttrResult: IResult) => {
+                // CODAP deleted the old collection after we moved the attribute so rename the new collection
+                if (!getAttrResult.success) {
+                  const updateCollectionNameRequest = createMessage("update", `${ctxStr(dataContextName)}.collection[${newCollectionName}]`, {
+                    "name": attr.name,
+                    "title": attr.name,
+                  });
+                  return codapInterface.sendRequest(updateCollectionNameRequest);
+                }
+              });
+            }
+          }
+        });
+      }
+    });
+  });
+};
+
+////////////// case functions //////////////
+
+export const getCaseCount = (dataContextName: string, collectionName: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseCount`;
+  return sendMessage("get", resource);
+};
+
+export const getCaseByIndex = (dataContextName: string, collectionName: string, index: number) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseByIndex[${index}]`;
+  return sendMessage("get", resource);
+};
+
+export const getCaseByID = (dataContextName: string, caseID: number | string) => {
+  const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
+  return sendMessage("get", resource);
+};
+
+export const getCaseBySearch = (dataContextName: string, collectionName: string, search: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseSearch[${search}]`;
+  return sendMessage("get", resource);
+};
+
+export const getCaseByFormulaSearch = (dataContextName: string, collectionName: string, search: string) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseFormulaSearch[${search}]`;
+  return sendMessage("get", resource);
+};
+
+export const createSingleOrParentCase = (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
+  return sendMessage("create", resource, values);
+};
+
+export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
+  const valuesWithParent = [
+    {
+      parent: parentCaseID,
+      values
+    }
+  ];
+  return sendMessage("create", resource, valuesWithParent);
+};
+
+export const updateCaseById = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
+  const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
+  const updateValues = {
     values
-  });
-}
+  };
+  return sendMessage("update", resource, updateValues);
+};
 
-export function createItem(dataContextName: string, item: IItem) {
-  codapInterface.sendRequest({
-    action: "create",
-    resource: `${dataSetString(dataContextName)}.item`,
-    values: item
-  });
-}
+export const updateCases = (dataContextName: string, collectionName: string, values: CodapItem[]) => {
+  const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
+  return sendMessage("update", resource, values);
+};
 
-export function createItems(dataContextName: string, items: IItem[]) {
-  items.forEach(item => {
-    createItem(dataContextName, item);
-  });
-}
+export const selectCases = (dataContextName: string, caseIds: string[]) => {
+  return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
+};
+
+////////////// item functions //////////////
+
+export const getItemCount = (dataContextName: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemCount`);
+};
+
+export const getAllItems = (dataContextName: string) =>{
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[*]`);
+};
+
+export const getItemByID = (dataContextName: string, itemID: number | string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemByID[${itemID}]`);
+};
+
+export const getItemByIndex = (dataContextName: string, index: number) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.item[${index}]`);
+};
+
+export const getItemByCaseID = (dataContextName: string, caseID: number | string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`);
+};
+
+export const getItemBySearch = (dataContextName: string, search: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[${search}]`);
+};
+
+export const createItems = (dataContextName: string, items: Array<CodapItemValues>) => {
+  return sendMessage("create", `${ctxStr(dataContextName)}.item`, items);
+};
+
+export const updateItemByID = (dataContextName: string, itemID: number | string, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.itemByID[${itemID}]`, values);
+};
+
+export const updateItemByIndex = (dataContextName: string, index: number, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.item[${index}]`, values);
+};
+
+export const updateItemByCaseID = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`, values);
+};

@@ -89,6 +89,14 @@ let config: IConfig | null = null;
  * initiated by the init method if CODAP was started from a previously saved
  * document.
  */
+
+export interface ClientNotification {
+  action: string;
+  resource: string;
+  values: any;
+}
+export type ClientHandler = (notification: ClientNotification) => void;
+
 let interactiveState = {};
 
 /**
@@ -351,7 +359,7 @@ export const codapInterface = {
    *   'move', 'resize', .... If not specified, all operations will be reported.
    * @param handler {Function} A handler to receive the notifications.
    */
-  on (actionSpec: string, resourceSpec: string, operation: string | (() => void), handler?: () => void) {
+  on (actionSpec: string, resourceSpec: string, operation: string | ClientHandler, handler?: ClientHandler) {
     let as = "notify",
         rs,
         os,
