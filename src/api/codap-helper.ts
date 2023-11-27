@@ -89,20 +89,8 @@ export const getDataContext = async (dataContextName: string) => {
 };
 
 export const createDataContext = async (dataContextName: string) => {
-  return codapInterface.sendRequest({
-    action:"get",
-    resource: ctxStr(dataContextName)
-    }, function (result: { success: any; }) {
-    if (result && !result.success) {
-      codapInterface.sendRequest({
-        action: "create",
-        resource: "dataContext",
-        values: {
-          name: dataContextName
-        }
-      });
-    }
-  });
+  const res = await sendMessage("create", "dataContext", {name: dataContextName});
+  return res;
 };
 
 export const createDataContextFromURL = async (url: string) => {
