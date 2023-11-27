@@ -28,9 +28,9 @@ const createMessage = (action: string, resource: string, values?: any) => {
   };
 };
 
-const sendMessage = (action: Action, resource: string, values?: CodapItemValues) => {
+const sendMessage = async (action: Action, resource: string, values?: CodapItemValues, callback?: (res: IResult) => void) => {
   const message = createMessage(action, resource, values);
-  return codapInterface.sendRequest(message) as unknown as IResult;
+  return await codapInterface.sendRequest(message, callback) as unknown as IResult;
 };
 
 ////////////// public API //////////////
@@ -80,42 +80,41 @@ export const addComponentListener = (callback: ClientHandler) => {
 
 ////////////// data context functions //////////////
 
-export const getListOfDataContexts = async () => {
-  return await sendMessage("get", "dataContextList");
+export const getListOfDataContexts = () => {
+  return sendMessage("get", "dataContextList");
 };
 
-export const getDataContext = async (dataContextName: string) => {
-  return await sendMessage("get", ctxStr(dataContextName));
+export const getDataContext = (dataContextName: string) => {
+  return sendMessage("get", ctxStr(dataContextName));
 };
 
-export const createDataContext = async (dataContextName: string) => {
-  const res = await sendMessage("create", "dataContext", {name: dataContextName});
-  return res;
+export const createDataContext = (dataContextName: string) => {
+  return sendMessage("create", "dataContext", {name: dataContextName});
 };
 
-export const createDataContextFromURL = async (url: string) => {
-  return await sendMessage("create", "dataContextFromURL", {"URL": url});
+export const createDataContextFromURL = (url: string) => {
+  return sendMessage("create", "dataContextFromURL", {"URL": url});
 };
 
-export const addDataContextsListListener = async (callback: ClientHandler) => {
+export const addDataContextsListListener = (callback: ClientHandler) => {
   codapInterface.on("notify", "documentChangeNotice", callback);
 };
 
-export const addDataContextChangeListener = async (context: DataContext, callback: ClientHandler) => {
+export const addDataContextChangeListener = (context: DataContext, callback: ClientHandler) => {
   codapInterface.on("notify", `dataContextChangeNotice[${context.name}]`, callback);
 };
 
 ////////////// collection functions //////////////
 
-export const getCollectionList = async (dataContextName: string) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.collectionList`);
+export const getCollectionList = (dataContextName: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.collectionList`);
 };
 
-export const getCollection = async (dataContextName: string, collectionName: string) => {
- return await sendMessage("get", `${ctxStr(dataContextName)}.${collStr(collectionName)}`);
+export const getCollection = (dataContextName: string, collectionName: string) => {
+ return sendMessage("get", `${ctxStr(dataContextName)}.${collStr(collectionName)}`);
 };
 
-export const createParentCollection = async (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
+export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: CodapItemValues = {
@@ -128,10 +127,10 @@ export const createParentCollection = async (dataContextName: string, collection
     values.attrs = attrs;
   }
 
-  return await sendMessage("create", resource, values);
+  return sendMessage("create", resource, values);
 };
 
-export const createChildCollection = async (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => {
+export const createChildCollection = (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: CodapItemValues = {
@@ -144,10 +143,10 @@ export const createChildCollection = async (dataContextName: string, collectionN
     values.attrs = attrs;
   }
 
-  return await sendMessage("create", resource, values);
+  return sendMessage("create", resource, values);
 };
 
-export const createNewCollection = async (dataContextName: string, collectionName: string, attrs?: Attribute[]) =>  {
+export const createNewCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) =>  {
   const resource = `${ctxStr(dataContextName)}.collection`;
 
   const values: CodapItemValues = {
@@ -159,7 +158,7 @@ export const createNewCollection = async (dataContextName: string, collectionNam
     values.attrs = attrs;
   }
 
-  return await sendMessage("create", resource, values);
+  return sendMessage("create", resource, values);
 };
 
 export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number) => {
@@ -185,39 +184,39 @@ export const ensureUniqueCollectionName = async (dataContextName: string, collec
 
 ////////////// attribute functions //////////////
 
-export const getAttribute = async (dataContextName: string, collectionName: string, attributeName: string) => {
+export const getAttribute = (dataContextName: string, collectionName: string, attributeName: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute[${attributeName}]`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const getAttributeList = async (dataContextName: string, collectionName: string) => {
+export const getAttributeList = (dataContextName: string, collectionName: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attributeList`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const createNewAttribute = async (dataContextName: string, collectionName: string, attributeName: string) => {
+export const createNewAttribute = (dataContextName: string, collectionName: string, attributeName: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute`;
   const values: CodapItemValues = {
     "name": attributeName,
     "title": attributeName,
   };
-  return await sendMessage("create", resource, values);
+  return sendMessage("create", resource, values);
 };
 
-export const updateAttribute = async (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => {
+export const updateAttribute = (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attribute[${attributeName}]`;
-  return await sendMessage("update", resource, values);
+  return sendMessage("update", resource, values);
 };
 
-export const updateAttributePosition = async (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => {
+export const updateAttributePosition = (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.attributeLocation[${attrName}]`;
-  return await sendMessage("update", resource, {
+  return sendMessage("update", resource, {
     "collection": collectionName,
     "position": newPosition
   });
 };
 
-export const createCollectionFromAttribute = async (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: string) => {
+export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: string) => {
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
 
@@ -267,37 +266,37 @@ export const createCollectionFromAttribute = async (dataContextName: string, old
 
 ////////////// case functions //////////////
 
-export const getCaseCount = async (dataContextName: string, collectionName: string) => {
+export const getCaseCount = (dataContextName: string, collectionName: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseCount`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const getCaseByIndex = async (dataContextName: string, collectionName: string, index: number) => {
+export const getCaseByIndex = (dataContextName: string, collectionName: string, index: number) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseByIndex[${index}]`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const getCaseByID = async (dataContextName: string, caseID: number | string) => {
+export const getCaseByID = (dataContextName: string, caseID: number | string) => {
   const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const getCaseBySearch = async (dataContextName: string, collectionName: string, search: string) => {
+export const getCaseBySearch = (dataContextName: string, collectionName: string, search: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseSearch[${search}]`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const getCaseByFormulaSearch = async (dataContextName: string, collectionName: string, search: string) => {
+export const getCaseByFormulaSearch = (dataContextName: string, collectionName: string, search: string) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.caseFormulaSearch[${search}]`;
-  return await sendMessage("get", resource);
+  return sendMessage("get", resource);
 };
 
-export const createSingleOrParentCase = async (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => {
+export const createSingleOrParentCase = (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
-  return await sendMessage("create", resource, values);
+  return sendMessage("create", resource, values);
 };
 
-export const createChildCase = async (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => {
+export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
   const valuesWithParent = [
     {
@@ -305,64 +304,64 @@ export const createChildCase = async (dataContextName: string, collectionName: s
       values
     }
   ];
-  return await sendMessage("create", resource, valuesWithParent);
+  return sendMessage("create", resource, valuesWithParent);
 };
 
-export const updateCaseById = async (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
+export const updateCaseById = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
   const updateValues = {
     values
   };
-  return await sendMessage("update", resource, updateValues);
+  return sendMessage("update", resource, updateValues);
 };
 
-export const updateCases = async (dataContextName: string, collectionName: string, values: CodapItem[]) => {
+export const updateCases = (dataContextName: string, collectionName: string, values: CodapItem[]) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
-  return await sendMessage("update", resource, values);
+  return sendMessage("update", resource, values);
 };
 
-export const selectCases = async (dataContextName: string, caseIds: string[]) => {
-  return await sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
+export const selectCases = (dataContextName: string, caseIds: string[]) => {
+  return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
 };
 
 ////////////// item functions //////////////
 
-export const getItemCount = async (dataContextName: string) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.itemCount`);
+export const getItemCount = (dataContextName: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemCount`);
 };
 
-export const getAllItems = async (dataContextName: string) =>{
-  return await sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[*]`);
+export const getAllItems = (dataContextName: string) =>{
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[*]`);
 };
 
-export const getItemByID = async (dataContextName: string, itemID: number | string) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.itemByID[${itemID}]`);
+export const getItemByID = (dataContextName: string, itemID: number | string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemByID[${itemID}]`);
 };
 
-export const getItemByIndex = async (dataContextName: string, index: number) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.item[${index}]`);
+export const getItemByIndex = (dataContextName: string, index: number) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.item[${index}]`);
 };
 
-export const getItemByCaseID = async (dataContextName: string, caseID: number | string) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`);
+export const getItemByCaseID = (dataContextName: string, caseID: number | string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`);
 };
 
-export const getItemBySearch = async (dataContextName: string, search: string) => {
-  return await sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[${search}]`);
+export const getItemBySearch = (dataContextName: string, search: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.itemSearch[${search}]`);
 };
 
-export const createItems = async (dataContextName: string, items: Array<CodapItemValues>) => {
-  return await sendMessage("create", `${ctxStr(dataContextName)}.item`, items);
+export const createItems = (dataContextName: string, items: Array<CodapItemValues>) => {
+  return sendMessage("create", `${ctxStr(dataContextName)}.item`, items);
 };
 
-export const updateItemByID = async (dataContextName: string, itemID: number | string, values: CodapItemValues) => {
-  return await sendMessage("update", `${ctxStr(dataContextName)}.itemByID[${itemID}]`, values);
+export const updateItemByID = (dataContextName: string, itemID: number | string, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.itemByID[${itemID}]`, values);
 };
 
-export const updateItemByIndex = async (dataContextName: string, index: number, values: CodapItemValues) => {
-  return await sendMessage("update", `${ctxStr(dataContextName)}.item[${index}]`, values);
+export const updateItemByIndex = (dataContextName: string, index: number, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.item[${index}]`, values);
 };
 
-export const updateItemByCaseID = async (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
-  return await sendMessage("update", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`, values);
+export const updateItemByCaseID = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.itemByCaseID[${caseID}]`, values);
 };
