@@ -28,9 +28,9 @@ const createMessage = (action: string, resource: string, values?: any) => {
   };
 };
 
-const sendMessage = async (action: Action, resource: string, values?: CodapItemValues, callback?: (res: IResult) => void) => {
+const sendMessage = (action: Action, resource: string, values?: CodapItemValues, callback?: (res: IResult) => void) => {
   const message = createMessage(action, resource, values);
-  return await codapInterface.sendRequest(message, callback) as unknown as IResult;
+  return codapInterface.sendRequest(message, callback) as unknown as IResult;
 };
 
 ////////////// public API //////////////
