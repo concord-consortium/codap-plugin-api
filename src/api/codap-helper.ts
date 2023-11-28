@@ -28,20 +28,9 @@ const createMessage = (action: string, resource: string, values?: any) => {
   };
 };
 
-const sendMessage = (action: Action, resource: string, values?: CodapItemValues) => {
+const sendMessage = async (action: Action, resource: string, values?: CodapItemValues) => {
   const message = createMessage(action, resource, values);
-  return new Promise((resolve, reject) => {
-    codapInterface.sendRequest(message, (result: IResult) => {
-      if (!result) {
-        reject("Request timeout");
-      } else if (result?.success) {
-        resolve(result.values);
-      } else {
-        const error_message = (result?.values?.error) ?? "unknown error";
-        reject(error_message);
-      }
-    });
-  });
+  return await codapInterface.sendRequest(message) as unknown as IResult;
 };
 
 ////////////// public API //////////////
@@ -58,14 +47,8 @@ export const initializePlugin = (options: IInitializePlugin) => {
 
 ////////////// component functions //////////////
 
-export const createTable = () => {
-  codapInterface.sendRequest({
-    action: "create",
-    resource: "component",
-    values: {
-      type: "caseTable"
-    }
-  });
+export const createTable = async () => {
+  return await sendMessage("create", "component", { type: "caseTable" });
 };
 
 // Selects this component. In CODAP this will bring this component to the front.
@@ -91,6 +74,10 @@ export const selectSelf = () => {
   });
 };
 
+export const addComponentListener = (callback: ClientHandler) => {
+  codapInterface.on("notify", "component", callback);
+};
+
 ////////////// data context functions //////////////
 
 export const getListOfDataContexts = () => {
@@ -102,20 +89,7 @@ export const getDataContext = (dataContextName: string) => {
 };
 
 export const createDataContext = (dataContextName: string) => {
-  return codapInterface.sendRequest({
-    action:"get",
-    resource: ctxStr(dataContextName)
-    }, function (result: { success: any; }) {
-    if (result && !result.success) {
-      codapInterface.sendRequest({
-        action: "create",
-        resource: "dataContext",
-        values: {
-          name: dataContextName
-        }
-      });
-    }
-  });
+  return sendMessage("create", "dataContext", {name: dataContextName});
 };
 
 export const createDataContextFromURL = (url: string) => {
@@ -187,7 +161,7 @@ export const createNewCollection = (dataContextName: string, collectionName: str
   return sendMessage("create", resource, values);
 };
 
-export const ensureUniqueCollectionName = (dataContextName: string, collectionName: string, index: number) => {
+export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number) => {
   index = index || 0;
   const uniqueName = `${collectionName}${index ? index : ""}`;
   const getCollMessage = {
