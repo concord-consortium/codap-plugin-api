@@ -1,6 +1,6 @@
 import {ClientHandler, codapInterface} from "./codap-interface";
 import { Action, Attribute, CodapItemValues, CodapItem, DataContext } from "./types";
-interface IDimensions {
+export interface IDimensions {
   width: number;
   height: number;
 }
@@ -35,20 +35,20 @@ const sendMessage = async (action: Action, resource: string, values?: CodapItemV
 
 ////////////// public API //////////////
 
-export const initializePlugin = (options: IInitializePlugin) => {
+export const initializePlugin = async (options: IInitializePlugin) => {
   const { pluginName, version, dimensions } = options;
   const interfaceConfig = {
     name: pluginName,
     version,
     dimensions
   };
-  return codapInterface.init(interfaceConfig);
+  return await codapInterface.init(interfaceConfig);
 };
 
 ////////////// component functions //////////////
 
 export const createTable = async () => {
-  return await sendMessage("create", "component", { type: "caseTable" });
+  return sendMessage("create", "component", { type: "caseTable" });
 };
 
 // Selects this component. In CODAP this will bring this component to the front.
