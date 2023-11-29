@@ -1,6 +1,6 @@
 {
   "name": "@concord-consortium/codap-plugin-api",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "An API to ease the development of CODAP plugins",
   "main": "dist/codap-plugin-api.js",
   "files": [
