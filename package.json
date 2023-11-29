@@ -1,6 +1,6 @@
 {
   "name": "@concord-consortium/codap-plugin-api",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "An API to ease the development of CODAP plugins",
   "keywords": [
     "CODAP",
@@ -44,18 +44,11 @@
     ]
   },
   "scripts": {
-    "start": "webpack serve --no-https",
-    "start:secure": "webpack serve",
-    "start:secure:no-certs": "webpack serve --no-https-request-cert",
     "build": "npm-run-all lint:build build:webpack",
     "build:webpack": "webpack --mode production",
     "build:top-test": "cross-env DEPLOY_PATH=specific/release/ webpack --mode production --output-path top-test/specific/release && cp top-test/specific/release/index-top.html top-test/",
     "lint": "eslint \"./src/**/*.{js,jsx,ts,tsx}\"",
-    "lint:build": "eslint -c \".eslintrc.build.js\" \"./src/**/*.{js,jsx,ts,tsx}\"",
     "lint:fix": "eslint --fix \"./src/**/*.{js,jsx,ts,tsx}\"",
-    "lint:style": "eslint -c \".eslintrc.style.js\" \"./src/**/*.{js,jsx,ts,tsx}\"",
-    "lint:style:fix": "eslint -c \".eslintrc.style.js\" \"./src/**/*.{js,jsx,ts,tsx}\"",
-    "serve:top-test": "npx http-server top-test",
     "test": "jest",
     "test:all": "npm-run-all build test start",
     "test:coverage": "jest --coverage",

@@ -26,10 +26,6 @@ module.exports = (env, argv) => {
     stats: {
       // suppress "export not found" warnings about re-exported types
       warningsFilter: /export .* was not found in/,
-    },
-    externals: {
-      'react': 'react',
-      'react-dom': 'ReactDOM'
     }
   };
 };

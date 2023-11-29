@@ -46,4 +46,4 @@ export {
   updateItemByCaseID,
   updateItemByID,
   updateItemByIndex
-} from "./api/codap-helper"
+} from "./api/codap-helper";

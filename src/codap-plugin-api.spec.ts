@@ -1,7 +1,7 @@
-import * as CodapPluginAPI from '../src/codap-plugin-api';
+import * as CodapPluginAPI from "./codap-plugin-api";
 
-describe('CodapPluginAPI', () => {
-  it('should export all the API functions', () => {
+describe("CodapPluginAPI", () => {
+  it("should export all the API functions", () => {
     expect(CodapPluginAPI).toBeDefined();
     expect (CodapPluginAPI.codapInterface).toBeDefined();
     expect (CodapPluginAPI.initializePlugin).toBeDefined();
