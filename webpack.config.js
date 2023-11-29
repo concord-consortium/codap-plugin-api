@@ -1,5 +1,7 @@
 'use strict';
 
+const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+
 module.exports = (env, argv) => {
   return {
     context: __dirname, // to automatically find tsconfig.json
@@ -26,6 +28,9 @@ module.exports = (env, argv) => {
     stats: {
       // suppress "export not found" warnings about re-exported types
       warningsFilter: /export .* was not found in/,
-    }
+    },
+    plugins: [
+      new ForkTsCheckerWebpackPlugin()
+    ]
   };
 };
