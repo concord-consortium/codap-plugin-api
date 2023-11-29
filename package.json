@@ -2,7 +2,10 @@
   "name": "@concord-consortium/codap-plugin-api",
   "version": "0.0.1",
   "description": "An API to ease the development of CODAP plugins",
-  "main": "index.js",
+  "main": "dist/codap-plugin-api.js",
+  "files": [
+    "dist"
+  ],
   "browserslist": "> 0.2%, last 5 versions, Firefox ESR, not dead, not ie > 0",
   "jest": {
     "preset": "ts-jest/presets/js-with-ts",
