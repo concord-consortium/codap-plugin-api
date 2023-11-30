@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
-    "outDir": "./dist/",
+    "outDir": "build",
     "sourceMap": true,
     "noImplicitAny": true,
     "module": "esnext",
     "moduleResolution": "node",
     "target": "es2018",
+    "declaration": true,
     "allowJs": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
