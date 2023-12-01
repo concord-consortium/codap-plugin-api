@@ -1,6 +1,9 @@
 coverage
 coverage-cypress
-dist
+build/
+/*.js
+/*.js.map
+/*.d.ts
 node_modules
 npm-error.log
 top-test

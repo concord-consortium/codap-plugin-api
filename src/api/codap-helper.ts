@@ -47,8 +47,15 @@ export const initializePlugin = async (options: IInitializePlugin) => {
 
 ////////////// component functions //////////////
 
-export const createTable = async () => {
-  return sendMessage("create", "component", { type: "caseTable" });
+export const createTable = async (dataContext: string, datasetName?: string) => {
+  const values: CodapItemValues = {
+    type: "caseTable",
+    dataContext
+  };
+  if (datasetName) {
+    values.name = datasetName;
+  }
+  return sendMessage("create", "component", values);
 };
 
 // Selects this component. In CODAP this will bring this component to the front.

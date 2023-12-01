@@ -1,0 +1,6 @@
+build/
+node_modules/
+src/
+.gitignore
+rollup.config.mjs
+tsconfig.json
