@@ -18,7 +18,7 @@ export interface IResult {
 ////////////// internal helper functions //////////////
 
 const ctxStr = (contextName: string) => `dataContext[${contextName}]`;
-const collStr = (collectionName: string) => `collection${collectionName}`;
+const collStr = (collectionName: string) => `collection[${collectionName}]`;
 
 const createMessage = (action: string, resource: string, values?: any) => {
   return {
@@ -118,7 +118,7 @@ export const getCollectionList = (dataContextName: string) => {
 };
 
 export const getCollection = (dataContextName: string, collectionName: string) => {
- return sendMessage("get", `${ctxStr(dataContextName)}.collection[${collStr(collectionName)}]`);
+ return sendMessage("get", `${ctxStr(dataContextName)}.${collStr(collectionName)}`);
 };
 
 export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
