@@ -43,7 +43,7 @@ export interface CodapItemValues {
 }
 
 export interface CodapItem {
-  id: string;
+  id: number|string;
   values: CodapItemValues;
 }
 

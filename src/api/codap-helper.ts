@@ -118,7 +118,7 @@ export const getCollectionList = (dataContextName: string) => {
 };
 
 export const getCollection = (dataContextName: string, collectionName: string) => {
- return sendMessage("get", `${ctxStr(dataContextName)}.${collStr(collectionName)}`);
+ return sendMessage("get", `${ctxStr(dataContextName)}.collection[${collStr(collectionName)}]`);
 };
 
 export const createParentCollection = (dataContextName: string, collectionName: string, attrs?: Attribute[]) => {
@@ -303,7 +303,7 @@ export const createSingleOrParentCase = (dataContextName: string, collectionName
   return sendMessage("create", resource, values);
 };
 
-export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => {
+export const createChildCase = (dataContextName: string, collectionName: string, parentCaseID: number|string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.${collStr(collectionName)}.case`;
   const valuesWithParent = [
     {
@@ -314,7 +314,7 @@ export const createChildCase = (dataContextName: string, collectionName: string,
   return sendMessage("create", resource, valuesWithParent);
 };
 
-export const updateCaseById = (dataContextName: string, caseID: number | string, values: CodapItemValues) => {
+export const updateCaseById = (dataContextName: string, caseID: number|string, values: CodapItemValues) => {
   const resource = `${ctxStr(dataContextName)}.caseByID[${caseID}]`;
   const updateValues = {
     values
@@ -327,7 +327,7 @@ export const updateCases = (dataContextName: string, collectionName: string, val
   return sendMessage("update", resource, values);
 };
 
-export const selectCases = (dataContextName: string, caseIds: string[]) => {
+export const selectCases = (dataContextName: string, caseIds: Array<string|number>) => {
   return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
 };
 
