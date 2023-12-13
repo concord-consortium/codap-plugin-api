@@ -107,8 +107,8 @@ export const addDataContextsListListener = (callback: ClientHandler) => {
   codapInterface.on("notify", "documentChangeNotice", callback);
 };
 
-export const addDataContextChangeListener = (context: DataContext, callback: ClientHandler) => {
-  codapInterface.on("notify", `dataContextChangeNotice[${context.name}]`, callback);
+export const addDataContextChangeListener = (dataContextName: string, callback: ClientHandler) => {
+  codapInterface.on("notify", `dataContextChangeNotice[${dataContextName}]`, callback);
 };
 
 ////////////// collection functions //////////////
