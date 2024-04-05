@@ -1,5 +1,5 @@
 import {ClientHandler, codapInterface} from "./codap-interface";
-import { Action, Attribute, CodapItemValues, CodapItem, DataContext } from "./types";
+import { Action, Attribute, CodapItemValues, CodapItem } from "./types";
 export interface IDimensions {
   width: number;
   height: number;
@@ -168,25 +168,29 @@ export const createNewCollection = (dataContextName: string, collectionName: str
   return sendMessage("create", resource, values);
 };
 
-export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number) => {
+export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number): Promise<string | undefined> => {
   index = index || 0;
-  const uniqueName = `${collectionName}${index ? index : ""}`;
+  const uniqueName = `${collectionName}${index !== 0 ? index : ""}`;
   const getCollMessage = {
     "action": "get",
     "resource": `${ctxStr(dataContextName)}.collection[${uniqueName}]`
   };
 
-  return codapInterface.sendRequest(getCollMessage, async (result: IResult) => {
-    if (result.success) {
-      // guard against run away loops
-      if (index >= 100) {
-        return undefined;
-      }
-      return await ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
-    } else {
-      return uniqueName;
-    }
+  const result: IResult = await new Promise((resolve) => {
+    codapInterface.sendRequest(getCollMessage, (res: IResult) => {
+      resolve(res);
+    });
   });
+
+  if (result.success) {
+    // guard against runaway loops
+    if (index >= 100) {
+      return undefined;
+    }
+    return ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
+  } else {
+    return uniqueName;
+  }
 };
 
 ////////////// attribute functions //////////////
@@ -223,23 +227,23 @@ export const updateAttributePosition = (dataContextName: string, collectionName:
   });
 };
 
-export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: string) => {
+export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string) => {
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
 
   return codapInterface.sendRequest(getCollectionMessage, async (result: IResult) => {
     // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
     // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
-    const moveCollection = result.success;
+    const moveCollection = result.success && (result.values.attrs.length === 1 || attr.name === oldCollectionName);
     const newCollectionName = moveCollection ? await ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
     if (newCollectionName === undefined) {
       return;
     }
-
+    const _parent = parent === "root" ? "_root_" : parent;
     const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
       "name": newCollectionName,
       "title": newCollectionName,
-      parent,
+      parent: _parent,
     });
 
     return codapInterface.sendRequest(createCollectionRequest, (createCollResult: IResult) => {
@@ -248,24 +252,7 @@ export const createCollectionFromAttribute = (dataContextName: string, oldCollec
           "collection": newCollectionName,
           "position": 0
         });
-        return codapInterface.sendRequest(moveAttributeRequest, (moveAttrResult: IResult) => {
-          if (moveAttrResult.success) {
-            if (moveCollection) {
-              // check if the old collection has been
-              const getAttributeListRequest = createMessage("get", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeList`);
-              return codapInterface.sendRequest(getAttributeListRequest, (getAttrResult: IResult) => {
-                // CODAP deleted the old collection after we moved the attribute so rename the new collection
-                if (!getAttrResult.success) {
-                  const updateCollectionNameRequest = createMessage("update", `${ctxStr(dataContextName)}.collection[${newCollectionName}]`, {
-                    "name": attr.name,
-                    "title": attr.name,
-                  });
-                  return codapInterface.sendRequest(updateCollectionNameRequest);
-                }
-              });
-            }
-          }
-        });
+        return codapInterface.sendRequest(moveAttributeRequest);
       }
     });
   });
