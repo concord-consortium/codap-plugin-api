@@ -1,6 +1,6 @@
 {
   "name": "@concord-consortium/codap-plugin-api",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "An API to ease the development of CODAP plugins",
   "keywords": [
     "CODAP",
