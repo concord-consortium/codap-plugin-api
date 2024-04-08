@@ -3,7 +3,7 @@ coverage-cypress
 build/
 /*.js
 /*.js.map
-/*.d.ts
+src/*.d.ts
 node_modules
 npm-error.log
 top-test
