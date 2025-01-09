@@ -316,7 +316,7 @@ export const updateCases = (dataContextName: string, collectionName: string, val
 
 export const getSelectionList = (dataContextName: string) => {
   return sendMessage("get", `${ctxStr(dataContextName)}.selectionList`);
-}
+};
 
 export const selectCases = (dataContextName: string, caseIds: Array<string|number>) => {
   return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
@@ -324,7 +324,7 @@ export const selectCases = (dataContextName: string, caseIds: Array<string|numbe
 
 export const addCasesToSelection = (dataContextName: string, caseIds: Array<string|number>) => {
   return sendMessage("update", `${ctxStr(dataContextName)}.selectionList`, caseIds);
-}
+};
 
 ////////////// item functions //////////////
 
