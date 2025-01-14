@@ -143,6 +143,7 @@ interface CodapItem {
     id: number | string;
     values: CodapItemValues;
 }
+type Action = "create" | "get" | "update" | "delete";
 
 interface IDimensions {
     width: number;
@@ -157,6 +158,7 @@ interface IResult {
     success: boolean;
     values: any;
 }
+declare const sendMessage: (action: Action, resource: string, values?: CodapItemValues) => Promise<IResult>;
 declare const initializePlugin: (options: IInitializePlugin) => Promise<any>;
 declare const createTable: (dataContext: string, datasetName?: string) => Promise<IResult>;
 declare const selectSelf: () => void;
@@ -188,7 +190,9 @@ declare const createSingleOrParentCase: (dataContextName: string, collectionName
 declare const createChildCase: (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => Promise<IResult>;
 declare const updateCaseById: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
 declare const updateCases: (dataContextName: string, collectionName: string, values: CodapItem[]) => Promise<IResult>;
+declare const getSelectionList: (dataContextName: string) => Promise<IResult>;
 declare const selectCases: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
+declare const addCasesToSelection: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
 declare const getItemCount: (dataContextName: string) => Promise<IResult>;
 declare const getAllItems: (dataContextName: string) => Promise<IResult>;
 declare const getItemByID: (dataContextName: string, itemID: number | string) => Promise<IResult>;
@@ -200,4 +204,4 @@ declare const updateItemByID: (dataContextName: string, itemID: number | string,
 declare const updateItemByIndex: (dataContextName: string, index: number, values: CodapItemValues) => Promise<IResult>;
 declare const updateItemByCaseID: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
 
-export { type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, initializePlugin, selectCases, selectSelf, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };
+export { type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, addCasesToSelection, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, getSelectionList, initializePlugin, selectCases, selectSelf, sendMessage, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };
