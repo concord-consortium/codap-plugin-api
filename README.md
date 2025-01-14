@@ -42,6 +42,19 @@ If you want to build a local version run `npm build`, it will create the files i
    To ensure that you are open a TypeScript file in VSC and then click on the version number next to
    `TypeScript React` in the status bar and select 'Use Workspace Version' in the popup menu.
 
+### Releasing
+
+To release a new version:
+
+1. Make sure you have an npm publishing account under the concordconsortium namespace.
+
+2. Update the version number in `package.json`.
+
+3. Run `npm install` to update the version number in `package-lock.json`.
+
+4. Run `npm run build` to build the new version.
+
+5. Run `npm publish --access public` to publish the new version.
 
 ## License
 
