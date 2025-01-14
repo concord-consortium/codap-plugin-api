@@ -28,7 +28,7 @@ const createMessage = (action: string, resource: string, values?: any) => {
   };
 };
 
-const sendMessage = async (action: Action, resource: string, values?: CodapItemValues) => {
+export const sendMessage = async (action: Action, resource: string, values?: CodapItemValues) => {
   const message = createMessage(action, resource, values);
   return await codapInterface.sendRequest(message) as unknown as IResult;
 };
@@ -314,8 +314,16 @@ export const updateCases = (dataContextName: string, collectionName: string, val
   return sendMessage("update", resource, values);
 };
 
+export const getSelectionList = (dataContextName: string) => {
+  return sendMessage("get", `${ctxStr(dataContextName)}.selectionList`);
+};
+
 export const selectCases = (dataContextName: string, caseIds: Array<string|number>) => {
   return sendMessage("create", `${ctxStr(dataContextName)}.selectionList`, caseIds);
+};
+
+export const addCasesToSelection = (dataContextName: string, caseIds: Array<string|number>) => {
+  return sendMessage("update", `${ctxStr(dataContextName)}.selectionList`, caseIds);
 };
 
 ////////////// item functions //////////////
