@@ -61,6 +61,13 @@ declare const codapInterface: {
      * @param {'preinit' || 'init' || 'active' || 'inactive' || 'closed'}
      */
     getConnectionState(): string;
+    /**
+     * How long, in milliseconds, to wait for a CODAP response before rejecting a request.
+     * Raise this for plugins that issue requests over very large datasets; lower it if a caller
+     * needs to fail fast. See `requestTimeout` for why this is not iframe-phone's 2s timer.
+     */
+    getRequestTimeout(): number;
+    setRequestTimeout(timeout: number): void;
     getStats(): {
         countDiReq: number;
         countDiRplSuccess: number;

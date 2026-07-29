@@ -51,6 +51,20 @@ let connection: { call: (arg0: any, arg1: (response: any) => void) => void; } | 
 
 let connectionState = "preinit";
 
+/**
+ * How long to wait for a CODAP response before giving up on a request.
+ *
+ * iframe-phone imposes its own hard-coded 2s deadline on every RPC, but that timer is a liveness
+ * probe rather than a completion deadline: it neither cancels the request nor forgets the callback,
+ * and it still delivers the real reply to that same callback once CODAP finishes. A request that
+ * legitimately takes longer than 2s — creating several thousand items, say — is therefore reported
+ * as failed while the result that is about to arrive is discarded. We wait for the real reply
+ * instead, bounded by this much longer deadline so that a CODAP which never replies at all (page
+ * closed, iframe removed) still can't leave callers awaiting forever.
+ */
+const kDefaultRequestTimeout = 60000;
+let requestTimeout = kDefaultRequestTimeout;
+
 const stats = {
   countDiReq: 0,
   countDiRplSuccess: 0,
@@ -262,6 +276,15 @@ export const codapInterface = {
    */
   getConnectionState () {return connectionState;},
 
+  /**
+   * How long, in milliseconds, to wait for a CODAP response before rejecting a request.
+   * Raise this for plugins that issue requests over very large datasets; lower it if a caller
+   * needs to fail fast. See `requestTimeout` for why this is not iframe-phone's 2s timer.
+   */
+  getRequestTimeout () {return requestTimeout;},
+
+  setRequestTimeout (timeout: number) {requestTimeout = timeout;},
+
   getStats () {
     return stats;
   },
@@ -308,24 +331,38 @@ export const codapInterface = {
    */
   sendRequest (message: any, callback?: any) {
     return new Promise(function (resolve, reject){
+      let isSettled = false;
+      let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+
+      // A request settles exactly once. Returns whether this call is the one that settled it, so
+      // the caller's callback is notified once, and only for the outcome the promise reports.
+      function settle (settleFn: (value?: any) => void, value: any) {
+        if (isSettled) { return false; }
+        isSettled = true;
+        if (timeoutTimer !== undefined) { clearTimeout(timeoutTimer); }
+        settleFn(value);
+        return true;
+      }
+
       function handleResponse (request: any, response: {success: boolean} | undefined, cb: (arg0: any, arg1: any) => void) {
         if (response === undefined) {
-          // console.warn('handleResponse: CODAP request timed out');
-          reject("handleResponse: CODAP request timed out: " + JSON.stringify(request));
+          // iframe-phone's 2s timer expired. That timer is advisory: the request has not been
+          // cancelled and this same callback will be invoked again with the real reply once CODAP
+          // finishes, so record the delay and keep waiting rather than reporting a failure and
+          // discarding a result that is still coming. See `requestTimeout` above.
           stats.countDiRplTimeout++;
-        } else {
-          connectionState = "active";
-          if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
-          resolve(response);
+          return;
         }
-        if (cb) {
+        connectionState = "active";
+        if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
+        if (settle(resolve, response) && cb) {
           cb(response, request);
         }
       }
       switch (connectionState) {
         case "closed": // log the message and ignore
           // console.warn('sendRequest on closed CODAP connection: ' + JSON.stringify(message));
-          reject("sendRequest on closed CODAP connection: " + JSON.stringify(message));
+          settle(reject, "sendRequest on closed CODAP connection: " + JSON.stringify(message));
           break;
         case "preinit": // warn, but issue request.
           // console.log('sendRequest on not yet initialized CODAP connection: ' +
@@ -338,6 +375,11 @@ export const codapInterface = {
             if (!stats.timeDiFirstReq) {
               stats.timeCodapFirstReq = stats.timeDiLastReq;
             }
+
+            timeoutTimer = setTimeout(function () {
+              settle(reject, "sendRequest: CODAP request exceeded " + requestTimeout + "ms: " +
+                  JSON.stringify(message));
+            }, requestTimeout);
 
             connection.call(message, function (response: any) {
               handleResponse(message, response, callback);
