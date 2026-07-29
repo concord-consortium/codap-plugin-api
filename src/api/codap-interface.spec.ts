@@ -223,7 +223,7 @@ describe("codapInterface.init handshake", () => {
     async () => {
       const fresh = await freshInterface();
 
-      fresh.init({ name: "test", title: "test" } as any).catch(() => undefined);
+      const initPromise = fresh.init({ name: "test", title: "test" } as any);
       const request = fresh.sendRequest({ action: "create", resource: "dataContext[x].item" });
       let settled = false;
       request.then(() => (settled = true), () => (settled = true));
@@ -232,6 +232,11 @@ describe("codapInterface.init handshake", () => {
       await flush();
 
       expect(settled).toBe(false);
+
+      // settle both so neither leaves its deadline timer running past the test
+      callbackAt(0)([{ success: true }, { success: true, values: { savedState: {} } }]);
+      callbackAt(1)({ success: true });
+      await Promise.all([initPromise, request]);
     });
 
   it("does not fail fast once the connection is established", async () => {
@@ -245,10 +250,15 @@ describe("codapInterface.init handshake", () => {
     const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
     request.then(() => (settled = true), () => (settled = true));
 
-    lastCallback()(undefined);
+    const callback = lastCallback();
+    callback(undefined);
     await flush();
 
     expect(settled).toBe(false);
+
+    // settle it so its deadline timer doesn't outlive the test
+    callback({ success: true });
+    await request;
   });
 });
 

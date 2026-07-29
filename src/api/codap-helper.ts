@@ -84,7 +84,8 @@ export const selectSelf = () => {
       resource:  `component[${id}]`,
       values: {request: "select"}
     }, (result?: IResult) => {
-      if (!result?.success) {
+      // an undefined result means CODAP didn't respond, which the catch below reports
+      if (result && !result.success) {
         reportRequestFailure("selectSelf");
       }
     }).catch(error => reportRequestFailure("selectSelf", error));
