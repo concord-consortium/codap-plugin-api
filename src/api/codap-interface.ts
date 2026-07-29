@@ -379,7 +379,7 @@ export const codapInterface = {
             stats.countDiReq++;
             stats.timeDiLastReq = new Date();
             if (!stats.timeDiFirstReq) {
-              stats.timeCodapFirstReq = stats.timeDiLastReq;
+              stats.timeDiFirstReq = stats.timeDiLastReq;
             }
 
             // Capture the deadline this request was given, so a later setRequestTimeout() can't
