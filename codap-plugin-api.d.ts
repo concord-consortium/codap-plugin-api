@@ -67,6 +67,10 @@ declare const codapInterface: {
      * needs to fail fast. See `requestTimeout` for why this is not iframe-phone's 2s timer.
      */
     getRequestTimeout(): number;
+    /**
+     * A non-finite or non-positive value falls back to the default: setTimeout treats NaN and
+     * negative delays as 0, which would silently make every subsequent request fail at once.
+     */
     setRequestTimeout(timeout: number): void;
     getStats(): {
         countDiReq: number;

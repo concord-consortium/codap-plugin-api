@@ -283,7 +283,13 @@ export const codapInterface = {
    */
   getRequestTimeout () {return requestTimeout;},
 
-  setRequestTimeout (timeout: number) {requestTimeout = timeout;},
+  /**
+   * A non-finite or non-positive value falls back to the default: setTimeout treats NaN and
+   * negative delays as 0, which would silently make every subsequent request fail at once.
+   */
+  setRequestTimeout (timeout: number) {
+    requestTimeout = Number.isFinite(timeout) && timeout > 0 ? timeout : kDefaultRequestTimeout;
+  },
 
   getStats () {
     return stats;
@@ -376,16 +382,21 @@ export const codapInterface = {
               stats.timeCodapFirstReq = stats.timeDiLastReq;
             }
 
+            // Capture the deadline this request was given, so a later setRequestTimeout() can't
+            // make the reported duration disagree with the timer that actually fired.
+            const timeout = requestTimeout;
             timeoutTimer = setTimeout(function () {
-              settle(reject, "sendRequest: CODAP request exceeded " + requestTimeout + "ms: " +
+              settle(reject, "sendRequest: CODAP request exceeded " + timeout + "ms: " +
                   JSON.stringify(message));
-            }, requestTimeout);
+            }, timeout);
 
             connection.call(message, function (response: any) {
               handleResponse(message, response, callback);
             });
           } else {
-            // console.error('sendRequest on non-existent CODAP connection');
+            // Nothing will ever call back, so settle now rather than leaving the caller waiting
+            // forever — the same guarantee the hard timeout provides once a request is in flight.
+            settle(reject, "sendRequest on non-existent CODAP connection: " + JSON.stringify(message));
           }
       }
     });

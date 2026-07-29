@@ -120,6 +120,35 @@ describe("codapInterface.sendRequest hard timeout", () => {
     await rejection;
   });
 
+  // setTimeout treats NaN and negative delays as 0, so an invalid timeout would otherwise make
+  // every subsequent request reject immediately.
+  it("falls back to the default when given an invalid timeout", () => {
+    codapInterface.setRequestTimeout(5000);
+    codapInterface.setRequestTimeout(NaN);
+    expect(codapInterface.getRequestTimeout()).toBe(60000);
+
+    codapInterface.setRequestTimeout(5000);
+    codapInterface.setRequestTimeout(-1);
+    expect(codapInterface.getRequestTimeout()).toBe(60000);
+
+    codapInterface.setRequestTimeout(5000);
+    codapInterface.setRequestTimeout(0);
+    expect(codapInterface.getRequestTimeout()).toBe(60000);
+  });
+
+  it("reports the timeout the request was actually given, even if it changes afterwards",
+    async () => {
+      codapInterface.setRequestTimeout(5000);
+      jest.useFakeTimers();
+      const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
+      const rejection = expect(request).rejects.toMatch(/exceeded 5000ms/);
+
+      codapInterface.setRequestTimeout(30000);   // must not change this request's report
+      jest.advanceTimersByTime(5000);
+
+      await rejection;
+    });
+
   it("does not reject after the hard deadline once the request has resolved", async () => {
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
@@ -129,5 +158,18 @@ describe("codapInterface.sendRequest hard timeout", () => {
 
     // advancing past the deadline must not produce an unhandled rejection
     expect(() => jest.advanceTimersByTime(120000)).not.toThrow();
+  });
+});
+
+describe("codapInterface.sendRequest without a connection", () => {
+  // Before init() there is no connection to call, and nothing would ever settle the promise --
+  // leaving the caller awaiting forever, which is the failure this timeout handling exists to
+  // prevent. A fresh module gives us the pre-init state.
+  it("rejects rather than leaving the caller waiting forever", async () => {
+    jest.resetModules();
+    const fresh = (await import("./codap-interface")).codapInterface;
+
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
+      .rejects.toMatch(/non-existent CODAP connection/);
   });
 });
