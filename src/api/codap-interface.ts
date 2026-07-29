@@ -210,6 +210,20 @@ interface IRequestOptions {
 }
 
 /**
+ * Reports an exception thrown by a caller's request callback.
+ *
+ * By the time the callback runs its request has already settled, so what it throws is not the
+ * request's failure and must not escape into the stack that invoked it — iframe-phone's message
+ * listener (where a throw skips its own bookkeeping), the deadline timer, or the promise executor
+ * (which discards it silently, since the promise has settled). Rethrowing on a fresh task keeps it
+ * out of all three while leaving it an uncaught error, so `window.onerror` and error reporters
+ * still see it: logging it instead would hide a consumer's bug from the monitoring they rely on.
+ */
+function reportCallbackError (error: unknown) {
+  queueMicrotask(() => { throw error; });
+}
+
+/**
  * Issues a request to CODAP and returns a promise of the response.
  */
 function issueRequest (message: any, options: IRequestOptions = {}) {
@@ -228,13 +242,17 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
       if (timeoutTimer !== undefined) { clearTimeout(timeoutTimer); }
       settleFn(value);
       if (callback) {
-        // A callback written for the success case may not expect `undefined`; a throw from it
-        // must not escape into the timer or the promise executor that settled the request.
+        // A callback written for the success case may not expect `undefined`. Whatever it throws
+        // must not escape into iframe-phone's listener, the deadline timer, or this executor —
+        // see reportCallbackError.
         try {
-          callback(callbackResponse, message);
+          const callbackResult = callback(callbackResponse, message);
+          // an async callback reports a throw as a rejected return value, which the catch can't see
+          if (callbackResult && typeof callbackResult.then === "function") {
+            callbackResult.then(undefined, reportCallbackError);
+          }
         } catch (error) {
-          // eslint-disable-next-line no-console
-          console.warn("codapInterface: request callback threw", error);
+          reportCallbackError(error);
         }
       }
     }
@@ -270,6 +288,14 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
             stats.timeDiFirstReq = stats.timeDiLastReq;
           }
 
+          // Issue the request before arming the deadline. `call` can throw synchronously — an
+          // uncloneable value in the message makes postMessage raise DataCloneError — and that
+          // throw rejects this promise directly, without going through settle(). A timer armed
+          // first would survive that, and fire a spurious failure at the deadline. iframe-phone
+          // never invokes the callback synchronously, so nothing can settle before the timer
+          // exists.
+          connection.call(message, handleResponse);
+
           // Capture the deadline this request was given, so a later setRequestTimeout() can't
           // make the reported duration disagree with the timer that actually fired.
           const timeout = requestTimeout;
@@ -277,8 +303,6 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
             settle(reject, "sendRequest: CODAP request exceeded " + timeout + "ms: " +
                 JSON.stringify(message));
           }, timeout);
-
-          connection.call(message, handleResponse);
         } else {
           // Nothing will ever call back, so settle now rather than leaving the caller waiting
           // forever — the same guarantee the deadline provides once a request is in flight.

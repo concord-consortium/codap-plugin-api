@@ -153,6 +153,25 @@ describe("codapInterface.sendRequest hard timeout", () => {
       await rejection;
     });
 
+  // `connection.call` can throw synchronously -- an uncloneable value in the message makes
+  // postMessage raise DataCloneError -- and that rejects the promise directly, without going
+  // through settle(). A deadline armed before the call would survive that and fire a minute later,
+  // reporting a failure the caller had already handled.
+  it("leaves no deadline behind when the request throws synchronously", async () => {
+    const callerCallback = jest.fn();
+    mockCall.mockImplementationOnce(() => {
+      throw new DOMException("value could not be cloned", "DataCloneError");
+    });
+
+    jest.useFakeTimers();
+    await expect(codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" },
+                                            callerCallback)).rejects.toThrow(/cloned/);
+
+    expect(jest.getTimerCount()).toBe(0);
+    jest.advanceTimersByTime(kDefaultTimeout);
+    expect(callerCallback).not.toHaveBeenCalled();
+  });
+
   it("clears the deadline once the request has resolved", async () => {
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
@@ -200,6 +219,70 @@ describe("codapInterface.sendRequest callback contract on failure", () => {
 
     expect(callerCallback).toHaveBeenCalledTimes(1);
     expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
+  });
+});
+
+// A throw from the caller's callback is a consumer bug, not a failure of the request -- which has
+// already settled by then. It must not escape into the stack that invoked the callback (iframe-
+// phone's listener, the deadline timer, this executor), so it is rethrown on a fresh task, where it
+// stays an uncaught error that window.onerror and error reporters can see. These tests capture what
+// is scheduled rather than letting it throw, which would fail the suite it is meant to be reported
+// through.
+describe("codapInterface.sendRequest callback errors", () => {
+  let scheduled: Array<() => void>;
+  let queueMicrotaskSpy: jest.SpyInstance;
+
+  beforeEach(async () => {
+    jest.useRealTimers();
+    await initInterface();
+    scheduled = [];
+    queueMicrotaskSpy = jest.spyOn(window, "queueMicrotask")
+        .mockImplementation((thunk: () => void) => { scheduled.push(thunk); });
+  });
+
+  // restore only this spy: jest.restoreAllMocks() would also reset the iframe-phone module mock
+  afterEach(() => {
+    queueMicrotaskSpy.mockRestore();
+  });
+
+  it("rethrows what a callback throws, without failing the request", async () => {
+    const boom = new Error("callback bug");
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               () => { throw boom; });
+
+    lastCallback()({ success: true });
+
+    await expect(request).resolves.toEqual({ success: true });
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toThrow(boom);
+  });
+
+  // An async callback turns its throw into a rejected return value, which a try/catch around the
+  // call never sees.
+  it("rethrows what an async callback throws", async () => {
+    const boom = new Error("async callback bug");
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               async () => { throw boom; });
+
+    lastCallback()({ success: true });
+
+    await expect(request).resolves.toEqual({ success: true });
+    await flush();
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toThrow(boom);
+  });
+
+  // Nothing ever calls back on this path, so the callback runs on the executor's own stack -- where
+  // a throw would be swallowed by the Promise machinery, the request having already rejected.
+  it("rethrows a callback throw on the no-connection path", async () => {
+    const fresh = await freshInterface();
+    const boom = new Error("callback bug");
+
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                   () => { throw boom; })).rejects.toMatch(/non-existent/);
+
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toThrow(boom);
   });
 });
 
