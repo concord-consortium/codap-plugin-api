@@ -46,8 +46,20 @@ codapInterface.setRequestTimeout(120000);  // allow longer for very large reques
 value they were given. A non-finite or non-positive value falls back to the default.
 
 `sendRequest` accepts an optional callback in addition to returning a promise. The callback
-receives CODAP's response, or `undefined` when CODAP did not respond at all — note that this is
-distinct from a response of `{ success: false }`, which means CODAP answered and declined.
+receives CODAP's response, or `undefined` when the request failed — note that this is distinct from
+a response of `{ success: false }`, which means CODAP answered and declined.
+
+`sendRequest` returns a promise whether or not a callback is passed, and that promise rejects on
+the same failures the callback reports as `undefined`: the request exceeded its deadline, or there
+was no connection to send it on. A request issued before `initializePlugin()` is called, or after
+`codapInterface.destroy()`, rejects rather than doing nothing. A rejected promise with nothing
+attached to it becomes an unhandled rejection, so handle the promise even when the callback is
+doing the real work:
+
+```js
+codapInterface.sendRequest(message, result => { /* ... */ })
+              .catch(error => console.warn("request failed", error));
+```
 
 ## Development
 
