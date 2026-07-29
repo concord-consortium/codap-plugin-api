@@ -62,14 +62,23 @@ declare const codapInterface: {
      */
     getConnectionState(): string;
     /**
-     * How long, in milliseconds, to wait for a CODAP response before rejecting a request.
-     * Raise this for plugins that issue requests over very large datasets; lower it if a caller
-     * needs to fail fast. See `requestTimeout` for why this is not iframe-phone's 2s timer.
+     * How long, in milliseconds, a request waits for a CODAP response before it is rejected.
+     * Defaults to 60000. Raise it for plugins that issue requests over very large datasets; lower it
+     * if a caller needs to fail fast.
+     *
+     * This is deliberately much longer than the 2s timer inside iframe-phone, which reports that no
+     * reply has arrived yet without cancelling the request — a large request routinely takes longer
+     * than that and still succeeds.
      */
     getRequestTimeout(): number;
     /**
-     * A non-finite or non-positive value falls back to the default: setTimeout treats NaN and
-     * negative delays as 0, which would silently make every subsequent request fail at once.
+     * Sets how long, in milliseconds, a request waits for a CODAP response before it is rejected.
+     * Applies to requests issued after the call; requests already in flight keep the value they
+     * were given.
+     *
+     * A non-finite or non-positive value falls back to the default of 60000, and larger values are
+     * clamped: setTimeout treats NaN and negative delays as 0 and overflows above its 32-bit
+     * ceiling, either of which would silently make every subsequent request fail at once.
      */
     setRequestTimeout(timeout: number): void;
     getStats(): {
