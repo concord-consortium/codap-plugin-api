@@ -33,6 +33,22 @@ export const sendMessage = async (action: Action, resource: string, values?: Cod
   return await codapInterface.sendRequest(message) as unknown as IResult;
 };
 
+// CODAP answers a request with success true or false; it may also not answer at all, in which case
+// a callback receives `undefined`. Absence of a response is not a failure response — it licenses no
+// conclusion about what CODAP did — so each call site has to decide what not knowing means for it.
+//
+// Prefer the promise form (`sendMessage`, or `await codapInterface.sendRequest(...)`) in helpers
+// that consume the answer: absence then arrives as a rejection, which is noisy if unhandled,
+// whereas an unchecked `undefined` yields a plausible-looking wrong answer. The callback form is
+// fine for fire-and-forget requests that nothing depends on.
+
+// Some helpers issue a request without awaiting it, so a rejection has nothing attached to observe
+// it. Report it rather than letting it surface as an unhandled rejection.
+const reportRequestFailure = (context: string, error?: unknown) => {
+  // eslint-disable-next-line no-console
+  console.warn(`${context} failed`, error ?? "");
+};
+
 ////////////// public API //////////////
 
 export const initializePlugin = async (options: IInitializePlugin) => {
@@ -61,24 +77,24 @@ export const createTable = async (dataContext: string, datasetName?: string) => 
 // Selects this component. In CODAP this will bring this component to the front.
 export const selectSelf = () => {
 
+  // Neither request is awaited. A failed request reports an undefined result to its callback.
   const selectComponent = async function (id: number) {
     return codapInterface.sendRequest({
       action: "notify",
       resource:  `component[${id}]`,
       values: {request: "select"}
-    }, (result: IResult) => {
-      if (!result.success) {
-        // eslint-disable-next-line no-console
-        console.log("selectSelf failed");
+    }, (result?: IResult) => {
+      if (!result?.success) {
+        reportRequestFailure("selectSelf");
       }
-    });
+    }).catch(error => reportRequestFailure("selectSelf", error));
   };
 
-  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result: IResult) => {
-    if (result.success) {
+  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result?: IResult) => {
+    if (result?.success) {
       return selectComponent(result.values.id);
     }
-  });
+  }).catch(error => reportRequestFailure("selectSelf", error));
 };
 
 export const addComponentListener = (callback: ClientHandler) => {
@@ -176,11 +192,10 @@ export const ensureUniqueCollectionName = async (dataContextName: string, collec
     "resource": `${ctxStr(dataContextName)}.collection[${uniqueName}]`
   };
 
-  const result: IResult = await new Promise((resolve) => {
-    codapInterface.sendRequest(getCollMessage, (res: IResult) => {
-      resolve(res);
-    });
-  });
+  // sendRequest rejects when CODAP doesn't respond, so awaiting it throws here. Not hearing back
+  // says nothing about whether the collection exists, so let that reach the caller rather than
+  // concluding the name is free and risking a duplicate.
+  const result = await codapInterface.sendRequest(getCollMessage) as unknown as IResult;
 
   if (result.success) {
     // guard against runaway loops
@@ -231,11 +246,22 @@ export const createCollectionFromAttribute = (dataContextName: string, oldCollec
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
 
-  return codapInterface.sendRequest(getCollectionMessage, async (result: IResult) => {
+  // Grandfathered exception to the promise-form guidance above: this reads the answer, so it would
+  // be better on promises, but its nested callbacks would need restructuring to convert. Until then
+  // it handles absence explicitly at each step.
+  return codapInterface.sendRequest(getCollectionMessage, async (result?: IResult) => {
+    if (!result) {
+      // nothing is known about the existing collection, so don't act on a guess
+      reportRequestFailure("createCollectionFromAttribute");
+      return;
+    }
     // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
     // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
     const moveCollection = result.success && (result.values.attrs.length === 1 || attr.name === oldCollectionName);
-    const newCollectionName = moveCollection ? await ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
+    const newCollectionName = moveCollection
+      ? await ensureUniqueCollectionName(dataContextName, attr.name, 0)
+          .catch(error => { reportRequestFailure("createCollectionFromAttribute", error); return undefined; })
+      : attr.name;
     if (newCollectionName === undefined) {
       return;
     }
@@ -246,13 +272,15 @@ export const createCollectionFromAttribute = (dataContextName: string, oldCollec
       parent: _parent,
     });
 
-    return codapInterface.sendRequest(createCollectionRequest, (createCollResult: IResult) => {
-      if (createCollResult.success) {
+    return codapInterface.sendRequest(createCollectionRequest, (createCollResult?: IResult) => {
+      if (createCollResult?.success) {
         const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
           "collection": newCollectionName,
           "position": 0
         });
-        return codapInterface.sendRequest(moveAttributeRequest);
+        // issued from a callback, so nothing is attached to observe a rejection
+        return codapInterface.sendRequest(moveAttributeRequest)
+                .catch(error => reportRequestFailure("createCollectionFromAttribute", error));
       }
     });
   });
