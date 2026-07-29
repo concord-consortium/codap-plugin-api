@@ -200,7 +200,7 @@ declare const getAttributeList: (dataContextName: string, collectionName: string
 declare const createNewAttribute: (dataContextName: string, collectionName: string, attributeName: string) => Promise<IResult>;
 declare const updateAttribute: (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => Promise<IResult>;
 declare const updateAttributePosition: (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => Promise<IResult>;
-declare const createCollectionFromAttribute: (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number | string) => Promise<unknown>;
+declare const createCollectionFromAttribute: (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number | string) => Promise<IResult>;
 declare const getCaseCount: (dataContextName: string, collectionName: string) => Promise<IResult>;
 declare const getCaseByIndex: (dataContextName: string, collectionName: string, index: number) => Promise<IResult>;
 declare const getCaseByID: (dataContextName: string, caseID: number | string) => Promise<IResult>;

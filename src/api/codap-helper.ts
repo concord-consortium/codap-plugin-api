@@ -243,48 +243,54 @@ export const updateAttributePosition = (dataContextName: string, collectionName:
   });
 };
 
-export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string) => {
+// Reorganizes the attribute into its own collection. Each step depends on the answer to the one
+// before it, so this follows the promise-form guidance above: it awaits every request and resolves
+// with the result of the last step it got to. A request that goes unanswered rejects; a step CODAP
+// explicitly refuses resolves with that refusal, so the caller always learns whether the attribute
+// ended up where it asked for.
+export const createCollectionFromAttribute = async (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string): Promise<IResult> => {
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
+  const existingCollection = await codapInterface.sendRequest(getCollectionMessage) as unknown as IResult;
 
-  // Grandfathered exception to the promise-form guidance above: this reads the answer, so it would
-  // be better on promises, but its nested callbacks would need restructuring to convert. Until then
-  // it handles absence explicitly at each step.
-  return codapInterface.sendRequest(getCollectionMessage, async (result?: IResult) => {
-    if (!result) {
-      // nothing is known about the existing collection, so don't act on a guess
-      reportRequestFailure("createCollectionFromAttribute");
-      return;
-    }
-    // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
-    // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
-    const moveCollection = result.success && (result.values.attrs.length === 1 || attr.name === oldCollectionName);
-    const newCollectionName = moveCollection
-      ? await ensureUniqueCollectionName(dataContextName, attr.name, 0)
-          .catch(error => { reportRequestFailure("createCollectionFromAttribute", error); return undefined; })
-      : attr.name;
-    if (newCollectionName === undefined) {
-      return;
-    }
-    const _parent = parent === "root" ? "_root_" : parent;
-    const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
-      "name": newCollectionName,
-      "title": newCollectionName,
-      parent: _parent,
-    });
+  // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
+  // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
+  // (a successful lookup for a collection with no attribute list leaves `attrs` undefined, hence `?.`)
+  const moveCollection = existingCollection.success &&
+    (existingCollection.values?.attrs?.length === 1 || attr.name === oldCollectionName);
+  const newCollectionName = moveCollection
+    ? await ensureUniqueCollectionName(dataContextName, attr.name, 0)
+    : attr.name;
+  if (newCollectionName === undefined) {
+    // no unused name was available, so there is nothing to create the collection under. Nothing was
+    // asked of CODAP and nothing went wrong with the connection, so this is a refusal rather than a
+    // rejection: report it in the shape CODAP uses for a request it declines, and let the caller
+    // read `success` the same way it does for every other step.
+    return {
+      success: false,
+      values: { error: `createCollectionFromAttribute: no unused collection name based on "${attr.name}"` }
+    };
+  }
 
-    return codapInterface.sendRequest(createCollectionRequest, (createCollResult?: IResult) => {
-      if (createCollResult?.success) {
-        const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
-          "collection": newCollectionName,
-          "position": 0
-        });
-        // issued from a callback, so nothing is attached to observe a rejection
-        return codapInterface.sendRequest(moveAttributeRequest)
-                .catch(error => reportRequestFailure("createCollectionFromAttribute", error));
-      }
-    });
+  const _parent = parent === "root" ? "_root_" : parent;
+  const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
+    "name": newCollectionName,
+    "title": newCollectionName,
+    parent: _parent,
   });
+  const createCollectionResult = await codapInterface.sendRequest(createCollectionRequest) as unknown as IResult;
+  if (!createCollectionResult.success) {
+    // without the new collection there is nowhere to move the attribute to
+    return createCollectionResult;
+  }
+
+  const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
+    "collection": newCollectionName,
+    "position": 0
+  });
+  // moving the attribute is what makes the new collection the attribute's collection, so this is the
+  // result that answers whether the reorganization happened
+  return await codapInterface.sendRequest(moveAttributeRequest) as unknown as IResult;
 };
 
 ////////////// case functions //////////////
