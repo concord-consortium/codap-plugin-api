@@ -22,6 +22,7 @@
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
     "testPathIgnorePatterns": [
+      "/build/",
       "/node_modules/"
     ],
     "coveragePathIgnorePatterns": [
