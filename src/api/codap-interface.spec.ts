@@ -161,6 +161,41 @@ describe("codapInterface.sendRequest hard timeout", () => {
   });
 });
 
+describe("codapInterface.init handshake", () => {
+  // Ignoring the advisory timeout is right once CODAP has answered at least once, but the
+  // handshake is precisely where "no reply" is evidence of "no CODAP" -- a plugin loaded outside
+  // CODAP must not wait out the full request timeout to discover that.
+  it("still fails fast when nothing answers the handshake", async () => {
+    jest.resetModules();
+    mockCall.mockClear();
+    const fresh = (await import("./codap-interface")).codapInterface;
+
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()(undefined);          // iframe-phone's 2s advisory timeout, nothing there
+
+    await expect(initPromise).rejects.toMatch(/timed out/);
+  });
+
+  it("does not fail fast once the connection is established", async () => {
+    jest.resetModules();
+    mockCall.mockClear();
+    const fresh = (await import("./codap-interface")).codapInterface;
+
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+
+    let settled = false;
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    request.then(() => (settled = true), () => (settled = true));
+
+    lastCallback()(undefined);
+    await flush();
+
+    expect(settled).toBe(false);
+  });
+});
+
 describe("codapInterface.sendRequest without a connection", () => {
   // Before init() there is no connection to call, and nothing would ever settle the promise --
   // leaving the caller awaiting forever, which is the failure this timeout handling exists to

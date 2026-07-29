@@ -357,6 +357,12 @@ export const codapInterface = {
           // finishes, so record the delay and keep waiting rather than reporting a failure and
           // discarding a result that is still coming. See `requestTimeout` above.
           stats.countDiRplTimeout++;
+          // Until CODAP has answered something, though, that timer is the liveness signal it was
+          // designed to be: no reply is the evidence that nothing is listening. Keep failing fast
+          // there so a plugin loaded outside CODAP learns in seconds rather than a minute.
+          if (connectionState === "preinit") {
+            settle(reject, "handleResponse: CODAP request timed out: " + JSON.stringify(request));
+          }
           return;
         }
         connectionState = "active";
