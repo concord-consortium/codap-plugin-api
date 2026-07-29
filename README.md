@@ -30,6 +30,25 @@ const myComponent = () => {
 
 For more examples of how to use the npm package, see the [CODAP Plugin Starter Project](https://github.com/concord-consortium/codap-plugin-starter-project).
 
+### Request timeouts
+
+A request waits up to 60 seconds for CODAP to respond before it is rejected. Requests over large
+datasets can legitimately take many seconds — creating several thousand items, say — so the
+deadline is deliberately generous, and exists only so that a CODAP which never responds at all
+(page closed, iframe removed) cannot leave a caller waiting forever.
+
+```js
+codapInterface.getRequestTimeout();        // 60000
+codapInterface.setRequestTimeout(120000);  // allow longer for very large requests
+```
+
+`setRequestTimeout` applies to requests issued after the call; requests already in flight keep the
+value they were given. A non-finite or non-positive value falls back to the default.
+
+`sendRequest` accepts an optional callback in addition to returning a promise. The callback
+receives CODAP's response, or `undefined` when CODAP did not respond at all — note that this is
+distinct from a response of `{ success: false }`, which means CODAP answered and declined.
+
 ## Development
 
 ### Building
