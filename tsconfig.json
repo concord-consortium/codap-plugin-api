@@ -13,7 +13,10 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "strict": true,
-    "types": [],
+    // jest's globals, for the specs. Declared explicitly because they used to arrive by accident:
+    // with an empty list, the only thing pulling them in was a transitive
+    // `/// <reference types="jest" />` inside the types of an unused matcher library.
+    "types": ["jest"],
     "jsx": "react",
     "lib": ["dom", "dom.iterable", "es2018"]
   },

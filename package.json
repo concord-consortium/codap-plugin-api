@@ -13,9 +13,6 @@
   "browserslist": "> 0.2%, last 5 versions, Firefox ESR, not dead, not ie > 0",
   "jest": {
     "preset": "ts-jest/presets/js-with-ts",
-    "setupFilesAfterEnv": [
-      "<rootDir>/src/test/setupTests.ts"
-    ],
     "testEnvironment": "jsdom",
     "transform": {
       "^.+\\.tsx?$": "ts-jest"
@@ -25,13 +22,8 @@
       "/node_modules/"
     ],
     "coveragePathIgnorePatterns": [
-      "/node_modules/",
-      "src/utilities/test-utils.ts"
+      "/node_modules/"
     ],
-    "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/__mocks__/fileMock.js",
-      "\\.(css|less|sass)$": "identity-obj-proxy"
-    },
     "moduleFileExtensions": [
       "ts",
       "tsx",
@@ -66,7 +58,6 @@
   "homepage": "https://github.com/concord-consortium/codap-plugin-api#readme",
   "devDependencies": {
     "@rollup/plugin-typescript": "^11.1.5",
-    "@testing-library/jest-dom": "^5.16.5",
     "@types/jest": "^29.5.1",
     "@typescript-eslint/eslint-plugin": "^5.59.7",
     "@typescript-eslint/parser": "^5.59.7",
@@ -76,7 +67,6 @@
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-jest": "^27.2.1",
     "eslint-plugin-json": "^3.1.0",
-    "identity-obj-proxy": "^3.0.0",
     "jest": "^29.5.0",
     "jest-environment-jsdom": "^29.5.0",
     "npm-run-all": "^4.1.5",
