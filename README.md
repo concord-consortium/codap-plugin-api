@@ -49,17 +49,33 @@ value they were given. A non-finite or non-positive value falls back to the defa
 receives CODAP's response, or `undefined` when the request failed — note that this is distinct from
 a response of `{ success: false }`, which means CODAP answered and declined.
 
-`sendRequest` returns a promise whether or not a callback is passed, and that promise rejects on
-the same failures the callback reports as `undefined`: the request exceeded its deadline, or there
-was no connection to send it on. A request issued before `initializePlugin()` is called, or after
-`codapInterface.destroy()`, rejects rather than doing nothing. A rejected promise with nothing
-attached to it becomes an unhandled rejection, so handle the promise even when the callback is
-doing the real work:
+`sendRequest` returns a promise whether or not a callback is passed, and that promise rejects with
+an `Error` on the same failures the callback reports as `undefined`: the request exceeded its
+deadline, CODAP answered with no value, or there was no connection to send it on. A request issued
+before `initializePlugin()` is called, or after `codapInterface.destroy()`, is refused rather than
+sent, and rejects at once. A rejected promise with nothing attached to it becomes an unhandled
+rejection, so handle the promise even when the callback is doing the real work:
 
 ```js
 codapInterface.sendRequest(message, result => { /* ... */ })
               .catch(error => console.warn("request failed", error));
 ```
+
+The deadline applies to each request separately, so a helper that chains several can take a multiple
+of it. `createCollectionFromAttribute`, which issues up to three requests in sequence, is the
+practical case.
+
+### Exceptions thrown by your callback
+
+If the callback you pass to `sendRequest` throws, the exception is rethrown as an uncaught error
+rather than being logged and discarded. By the time the callback runs its request has already
+settled, so what it throws is a bug in the callback and not a failure of the request — it does not
+reject the promise, and the request's outcome is unaffected.
+
+It stays loud on purpose. The most likely thing for a callback to throw is a `TypeError` from
+reading `result.success` on the `undefined` it receives when a request fails — a mistake worth
+finding, and one that logging would hide from `window.onerror` and from whatever error reporting a
+plugin relies on. If you pass callbacks that can throw, handle the error inside the callback.
 
 ## Development
 

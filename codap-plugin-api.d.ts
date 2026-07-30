@@ -32,7 +32,16 @@ declare const codapInterface: {
         countDiReq: number;
         countDiRplSuccess: number;
         countDiRplFail: number;
+        /**
+         * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
+         *
+         * This counts probes, not failures. A request slower than 2s that goes on to succeed normally
+         * increments it, so on a plugin doing bulk work a high count is expected and says nothing is
+         * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
+         */
         countDiRplTimeout: number;
+        /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+        countDiReqDeadlineExceeded: number;
         countCodapReq: number;
         countCodapUnhandledReq: number;
         countCodapRplSuccess: number;
@@ -85,7 +94,16 @@ declare const codapInterface: {
         countDiReq: number;
         countDiRplSuccess: number;
         countDiRplFail: number;
+        /**
+         * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
+         *
+         * This counts probes, not failures. A request slower than 2s that goes on to succeed normally
+         * increments it, so on a plugin doing bulk work a high count is expected and says nothing is
+         * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
+         */
         countDiRplTimeout: number;
+        /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+        countDiReqDeadlineExceeded: number;
         countCodapReq: number;
         countCodapUnhandledReq: number;
         countCodapRplSuccess: number;
@@ -107,15 +125,34 @@ declare const codapInterface: {
      * @param iInteractiveState {Object}
      */
     updateInteractiveState(iInteractiveState: any): void;
+    /**
+     * Tears down the connection to CODAP. Requests issued afterwards are refused rather than sent;
+     * `init()` can be called again to reconnect.
+     */
     destroy(): void;
     /**
      * Sends a request to CODAP. The format of the message is as defined in
      * {@link https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-API}.
      *
-     * @param message {String}
-     * @param callback {function(response, request)} Optional callback to handle
-     *    the CODAP response. Note both the response and the initial request will
-     *    sent.
+     * A request waits up to `getRequestTimeout()` milliseconds (60 seconds by default) for CODAP to
+     * answer. It settles exactly once, and both the promise and the callback report every outcome:
+     *
+     * - **CODAP answered:** the promise resolves with the response and the callback receives it. That
+     *   includes `{success: false}`, which means CODAP answered and declined — a resolved promise, not
+     *   a rejected one.
+     * - **The request failed:** the promise rejects with an `Error` and the callback is invoked with
+     *   `undefined`. This covers exceeding the deadline, there being no connection to send on (before
+     *   `initializePlugin()` or after `destroy()`), and CODAP answering with no value at all.
+     *
+     * The callback is invoked exactly once, after the promise has settled. A callback written as
+     * `result.success` therefore has to handle the `undefined` it receives on failure. Note that the
+     * promise rejects whether or not a callback is passed, so it still needs a `.catch` to avoid an
+     * unhandled rejection. An exception thrown by the callback itself is rethrown as an uncaught error
+     * rather than failing the request, which has already settled by then.
+     *
+     * @param message {Object} The request, as in the Data Interactive API.
+     * @param callback {function(response, request)} Optional. Receives the response, or `undefined`
+     *    if the request failed, followed by the original request.
      *
      * @return {Promise} The promise of the response from CODAP.
      */
