@@ -6,27 +6,30 @@ This npm library provides two main files that will aid in interfacing with the C
 
 ### Installing and usage
 
-In the directory of your plugin project, run `npm install codap-plugin-api`.
+In the directory of your plugin project, run
+`npm install @concord-consortium/codap-plugin-api`.
 
 In myComponent.js:
 
-```
-import codapInterface from "codap-plugin-api";
-import codapHelpers from "codap-plugin-api";
+```js
+import { initializePlugin } from "@concord-consortium/codap-plugin-api";
 
 const myComponent = () => {
   useEffect(() => {
-    const myOptions = {
-      pluginName: myPlugin;
-      version: 1.0.0;
+    initializePlugin({
+      pluginName: "myPlugin",
+      version: "1.0.0",
       dimensions: {
         width: 300,
         height: 400
-      };
-    codapHelpers.initializePlugin(myOptions);
+      }
+    }).catch(error => console.warn("could not connect to CODAP", error));
   }, []);
-}
+};
 ```
+
+Everything the package exports is a named export, including `codapInterface` for the lower-level
+request API.
 
 For more examples of how to use the npm package, see the [CODAP Plugin Starter Project](https://github.com/concord-consortium/codap-plugin-starter-project).
 
@@ -101,7 +104,11 @@ path reaches it first.
 
 ### Building
 
-If you want to build a local version run `npm build`, it will create the files in the `dist` folder.
+To build a local version, run `npm run build`. `tsc` compiles the sources into `build/`, then rollup
+bundles them into the package's entry points at the repository root: `codap-plugin-api.js` and the
+type declarations in `codap-plugin-api.d.ts`. The bundle is generated at build time and git-ignored;
+the declarations are committed, so a change affecting the public API needs a build and the regenerated
+`codap-plugin-api.d.ts` committed with it, rather than hand-edited.
 
 ### Notes
 
