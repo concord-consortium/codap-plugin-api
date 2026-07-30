@@ -92,9 +92,17 @@ export const selectSelf = () => {
   };
 
   codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result?: IResult) => {
-    if (result?.success) {
-      return selectComponent(result.values.id);
+    // an undefined result means CODAP didn't respond, which the catch below reports
+    if (!result) {
+      return;
     }
+    // without the frame's id there is no component to select, and requesting `component[undefined]`
+    // would ask CODAP to select something that cannot exist
+    if (!result.success || result.values?.id === undefined) {
+      reportRequestFailure("selectSelf");
+      return;
+    }
+    return selectComponent(result.values.id);
   }).catch(error => reportRequestFailure("selectSelf", error));
 };
 
@@ -187,6 +195,11 @@ export const createNewCollection = (dataContextName: string, collectionName: str
 
 export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number): Promise<string | undefined> => {
   index = index || 0;
+  // guard against runaway loops. Checked before the lookup rather than after, so giving up costs no
+  // request: each one can take up to the full request timeout, and this recurses once per attempt.
+  if (index >= 100) {
+    return undefined;
+  }
   const uniqueName = `${collectionName}${index !== 0 ? index : ""}`;
   const getCollMessage = {
     "action": "get",
@@ -199,10 +212,6 @@ export const ensureUniqueCollectionName = async (dataContextName: string, collec
   const result = await codapInterface.sendRequest(getCollMessage) as unknown as IResult;
 
   if (result.success) {
-    // guard against runaway loops
-    if (index >= 100) {
-      return undefined;
-    }
     return ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
   } else {
     return uniqueName;
