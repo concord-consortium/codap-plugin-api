@@ -8,7 +8,12 @@ const config = [
       format: 'cjs',
       sourcemap: true,
     },
-    external: ['react'],
+    // iframe-phone stays a runtime require rather than being inlined: it is a declared dependency,
+    // so a consumer installs it themselves, and bundling it would duplicate the library for anyone
+    // who also depends on it directly. Naming it here is also what silences rollup's
+    // "unresolved dependencies" warning, which was rollup reporting that it had made this choice
+    // without being told to.
+    external: ['iframe-phone'],
     plugins: [typescript()]
   },
 

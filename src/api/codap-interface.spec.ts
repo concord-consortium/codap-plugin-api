@@ -146,11 +146,10 @@ describe("codapInterface.sendRequest hard timeout", () => {
     codapInterface.setRequestTimeout(5000);
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
-    const rejection = expect(request).rejects.toThrow(/exceeded/);
 
     jest.advanceTimersByTime(5000);
 
-    await rejection;
+    await expect(request).rejects.toThrow(/exceeded/);
   });
 
   // setTimeout treats NaN and negative delays as 0, so an invalid timeout would otherwise make
@@ -175,12 +174,11 @@ describe("codapInterface.sendRequest hard timeout", () => {
       codapInterface.setRequestTimeout(5000);
       jest.useFakeTimers();
       const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
-      const rejection = expect(request).rejects.toThrow(/exceeded 5000ms/);
 
       codapInterface.setRequestTimeout(30000);   // must not change this request's report
       jest.advanceTimersByTime(5000);
 
-      await rejection;
+      await expect(request).rejects.toThrow(/exceeded 5000ms/);
     });
 
 });
@@ -272,9 +270,8 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     advisoryTimeout(lastCallback());
     expect(callerCallback).not.toHaveBeenCalled();
 
-    const rejection = expect(request).rejects.toThrow(/exceeded/);
     jest.advanceTimersByTime(kDefaultTimeout);
-    await rejection;
+    await expect(request).rejects.toThrow(/exceeded/);
 
     expectSettledOnce(callerCallback, undefined);
     expect(codapInterface.getStats().countDiReqDeadlineExceeded).toBe(before + 1);
@@ -333,9 +330,8 @@ describe("codapInterface.sendRequest settles every path through the contract", (
 
     jest.useFakeTimers();
     const request = codapInterface.sendRequest(cyclic, callerCallback);
-    const rejection = expect(request).rejects.toThrow(/exceeded/);
     jest.advanceTimersByTime(kDefaultTimeout);
-    await rejection;
+    await expect(request).rejects.toThrow(/exceeded/);
 
     expectSettledOnce(callerCallback, undefined);
   });
@@ -436,9 +432,8 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
                                                callerCallback);
     const callback = lastCallback();
-    const rejection = expect(request).rejects.toThrow(/exceeded/);
     jest.advanceTimersByTime(kDefaultTimeout);
-    await rejection;
+    await expect(request).rejects.toThrow(/exceeded/);
 
     const after = { ...codapInterface.getStats() };
     callback({ success: true });

@@ -83,12 +83,14 @@ module.exports = {
   },
   overrides: [
     { // rules specific to Jest tests
-      files: ["src/**/*.test.*"],
+      // both suffixes, matching jest's own testRegex: the tests here are named *.spec.*, and this
+      // block silently applied to nothing while it listed only *.test.*
+      files: ["src/**/*.spec.*", "src/**/*.test.*"],
       env: {
         node: true,
         jest: true
       },
-      plugins: ["jest", "testing-library"],
+      plugins: ["jest"],
       extends: ["plugin:jest/recommended"],
       rules: {
         "@typescript-eslint/no-non-null-assertion": "off",
@@ -104,15 +106,10 @@ module.exports = {
         node: true
       }
     },
-    { // webpack configs
-      files: ["**/webpack.config.js"],
+    { // rollup config
+      files: ["rollup.config.mjs"],
       env: {
         node: true
-      },
-      rules: {
-        "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-var-requires": "off",
-        "quotes": ["error", "single", { allowTemplateLiterals: true, avoidEscape: true }],
       }
     }
   ]
