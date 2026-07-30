@@ -49,6 +49,20 @@ value they were given. A non-finite or non-positive value falls back to the defa
 receives CODAP's response, or `undefined` when the request failed — note that this is distinct from
 a response of `{ success: false }`, which means CODAP answered and declined.
 
+In TypeScript the callback's parameter has to admit that absence. The exported `RequestCallback` type
+is `(response?: IResult, request?: any) => void`, so a callback declared to take `IResult` alone does
+not compile — it is the one that throws when a request fails:
+
+```ts
+codapInterface.sendRequest(message, (result?: IResult) => {
+  if (!result) { return; }        // the request failed; the promise rejects with the reason
+  if (result.success) { /* ... */ }
+});
+```
+
+A batched request — an array of requests — is answered with an array of results, which does not fit
+that type. Batch through the returned promise rather than a callback.
+
 `sendRequest` returns a promise whether or not a callback is passed, and that promise rejects with
 an `Error` on the same failures the callback reports as `undefined`: the request exceeded its
 deadline, CODAP answered with no value, or there was no connection to send it on. A request issued
@@ -74,10 +88,14 @@ rather than being logged and discarded. By the time the callback runs its reques
 settled, so what it throws is a bug in the callback and not a failure of the request — it does not
 reject the promise, and the request's outcome is unaffected.
 
-It stays loud on purpose. The most likely thing for a callback to throw is a `TypeError` from
-reading `result.success` on the `undefined` it receives when a request fails — a mistake worth
-finding, and one that logging would hide from `window.onerror` and from whatever error reporting a
-plugin relies on. If you pass callbacks that can throw, handle the error inside the callback.
+It stays loud on purpose. Logging it instead would hide a bug in your plugin from `window.onerror`
+and from whatever error reporting you rely on. If you pass callbacks that can throw, handle the error
+inside the callback.
+
+The classic version of this is reading `result.success` on the `undefined` a callback receives when a
+request fails. In TypeScript `RequestCallback` makes that a compile error instead, which is the whole
+reason the parameter is typed; in JavaScript it remains a `TypeError` at runtime, on whichever failure
+path reaches it first.
 
 ## Development
 
