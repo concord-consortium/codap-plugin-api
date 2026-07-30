@@ -165,6 +165,9 @@ export type ClientHandler = (notification: ClientNotification) => void;
  */
 export type RequestCallback = (response?: IResult, request?: any) => void;
 
+/** What CODAP answers with: one result, or one per request when a batch was sent. */
+type CodapResponse = IResult | IResult[];
+
 let interactiveState = {};
 
 /**
@@ -351,7 +354,7 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
     // optional callback argument: what the callback receives is then fixed by which one is called,
     // so a path added later cannot resolve the promise correctly while notifying its callback with
     // `undefined`.
-    function settle (settleFn: (value?: any) => void, value: any, callbackResponse?: IResult) {
+    function settle (settleFn: (value?: any) => void, value: any, callbackResponse?: CodapResponse) {
       if (isSettled) { return; }
       isSettled = true;
       if (timeoutTimer !== undefined) { clearTimeout(timeoutTimer); }
@@ -364,7 +367,11 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
           // An async callback reports a throw as a rejected return value, which the catch can't see.
           // `RequestCallback` returns `void`, but TypeScript lets a callback in that position return
           // a value anyway, so an async one arrives here as a promise and has to be observed.
-          const callbackResult = callback(callbackResponse, message) as unknown;
+          // A batched request's callback receives the array, which `RequestCallback` does not
+          // describe — see its doc: batch through the promise. The cast keeps that documented
+          // narrowing here rather than pushing an array every consumer must handle into the type.
+          const callbackResult = callback(callbackResponse as IResult | undefined,
+                                          message) as unknown;
           if (callbackResult && typeof (callbackResult as PromiseLike<unknown>).then === "function") {
             (callbackResult as PromiseLike<unknown>).then(undefined, reportCallbackError);
           }
@@ -374,7 +381,7 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
       }
     }
 
-    function settleSuccess (response: IResult) {
+    function settleSuccess (response: CodapResponse) {
       settle(resolve, response, response);
     }
 
@@ -400,7 +407,7 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
      *    CODAP arrives as `undefined` with this argument absent, which is a real answer and settles
      *    the request at once. See `connection`'s type for why this argument has to be declared.
      */
-    function handleResponse (response: IResult | undefined | null, noReplyYet?: Error) {
+    function handleResponse (response: CodapResponse | undefined | null, noReplyYet?: Error) {
       // A reply can still arrive after the deadline rejected the request. Returning early keeps it
       // from marking the connection active or counting a success against a request the caller has
       // already been told failed.
@@ -427,10 +434,15 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
         return;
       }
       markConnectionActive();
-      // TODO: a batched request is answered with an array, which has no top-level `success`, so
-      // every successful init() handshake is counted a decline here. These counters are diagnostic
-      // only, but they mislead whoever reads getStats() to find out why a plugin is misbehaving.
-      if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
+      // A batched request — an array of requests — is answered with an array of results, which has no
+      // top-level `success` to read. It counts as the one request it was, and as a success only if
+      // every result in it succeeded, so the counters keep reconciling against `countDiReq`. A reply
+      // with no results in it counts as a decline rather than a vacuous success, since a batch
+      // answered by nothing did not do what was asked.
+      const succeeded = Array.isArray(response)
+                          ? response.length > 0 && response.every(result => result?.success)
+                          : response.success;
+      if (succeeded) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
       settleSuccess(response);
     }
 

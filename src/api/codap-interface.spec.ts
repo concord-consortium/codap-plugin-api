@@ -744,6 +744,30 @@ describe("codapInterface stats", () => {
     expect(fresh.getStats().countDiRplSuccess).toBeGreaterThan(0);
   });
 
+  // A batched request is answered with an array, which has no top-level `success` to read, so every
+  // successful init() handshake used to be counted a decline -- misleading exactly the person reading
+  // getStats() to find out why a plugin is misbehaving.
+  it("counts a batched reply as the one request it was", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+
+    expect(fresh.getStats().countDiRplSuccess).toBe(1);
+    expect(fresh.getStats().countDiRplFail).toBe(0);
+    expect(fresh.getStats().countDiReq).toBe(1);
+  });
+
+  it("counts a batched reply as a decline when any part of it failed", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: false, values: { error: "no frame" } }]);
+    await expect(initPromise).rejects.toThrow(/no frame/);
+
+    expect(fresh.getStats().countDiRplSuccess).toBe(0);
+    expect(fresh.getStats().countDiRplFail).toBe(1);
+  });
+
   it("records the time of the first data-interactive request", async () => {
     const fresh = await freshInterface();
     expect(fresh.getStats().timeDiFirstReq).toBeNull();

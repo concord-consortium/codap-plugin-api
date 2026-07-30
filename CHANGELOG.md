@@ -96,6 +96,12 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   what its name says, a request CODAP answered and declined, rather than mixing those with failures.
   Every counter is documented in the published type declarations.
 
+  The counters also reconcile now: `countDiReq` minus the three outcome counters is the number of
+  requests still in flight. A batched request is answered with an array, which has no top-level
+  `success`, so it was counted as a decline however it went — meaning every successful `init()`
+  handshake reported one. It counts as the single request it was, successful only if every result in
+  it succeeded.
+
 ### Fixed
 
 - **Request failures inside the bundled helpers are reported rather than thrown.** `selectSelf`,
