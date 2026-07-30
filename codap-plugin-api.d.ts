@@ -177,8 +177,9 @@ declare const codapInterface: {
      *   includes `{success: false}`, which means CODAP answered and declined — a resolved promise, not
      *   a rejected one.
      * - **The request failed:** the promise rejects with an `Error` and the callback is invoked with
-     *   `undefined`. This covers exceeding the deadline, there being no connection to send on (before
-     *   `initializePlugin()` or after `destroy()`), and CODAP answering with no value at all.
+     *   `undefined`. Every way a request can fail reports this way — exceeding the deadline, there
+     *   being no connection to send on (before `initializePlugin()` or after `destroy()`), CODAP
+     *   answering with no value at all, and the send itself throwing.
      *
      * The callback is invoked exactly once, after the promise has settled. A callback written as
      * `result.success` therefore has to handle the `undefined` it receives on failure. Note that the

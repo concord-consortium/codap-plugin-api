@@ -39,8 +39,9 @@ export const sendMessage = async (action: Action, resource: string, values?: Cod
 //
 // Prefer the promise form (`sendMessage`, or `await codapInterface.sendRequest(...)`) in helpers
 // that consume the answer: absence then arrives as a rejection, which is noisy if unhandled,
-// whereas an unchecked `undefined` yields a plausible-looking wrong answer. The callback form is
-// fine for fire-and-forget requests that nothing depends on.
+// whereas an unchecked `undefined` yields a plausible-looking wrong answer. The callback form suits
+// a fire-and-forget request that nothing depends on — but the promise still rejects on failure
+// whether or not anyone is reading it, so such a call needs a `.catch` as well as its callback.
 
 // Some helpers issue a request without awaiting it, so a rejection has nothing attached to observe
 // it. Report it rather than letting it surface as an unhandled rejection.

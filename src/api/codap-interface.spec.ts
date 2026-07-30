@@ -1,4 +1,3 @@
-import { IframePhoneRpcEndpoint } from "iframe-phone";
 import { codapInterface } from "./codap-interface";
 
 // iframe-phone invokes the callback passed to `call()` with `undefined` when its hard-coded 2s
@@ -14,12 +13,29 @@ import { codapInterface } from "./codap-interface";
 // means in production: CODAP answered with no value.
 const mockCall = jest.fn();
 
+/**
+ * The notification handler each constructed endpoint was given, in construction order. Recorded
+ * here rather than read back off the constructor mock, because `jest.resetModules()` gives the
+ * re-imported module a fresh mock: the constructor this file imported would then no longer be the
+ * one the module under test constructed, and a test reading its calls would assert against a
+ * different module instance than the one it exercised.
+ */
+const notificationHandlers: ((request: any, callback: (r: any) => void) => void)[] = [];
+
 jest.mock("iframe-phone", () => ({
-  IframePhoneRpcEndpoint: jest.fn().mockImplementation(() => ({
-    call: (message: any, callback: (response: any, noReplyYet?: Error) => void) =>
-            mockCall(message, callback)
-  }))
+  IframePhoneRpcEndpoint: jest.fn().mockImplementation((handler: any) => {
+    notificationHandlers.push(handler);
+    return {
+      call: (message: any, callback: (response: any, noReplyYet?: Error) => void) =>
+              mockCall(message, callback)
+    };
+  })
 }));
+
+/** The notification handler of the most recently constructed endpoint. */
+function lastNotificationHandler() {
+  return notificationHandlers[notificationHandlers.length - 1];
+}
 
 /** Captured before any test mutates it, so these tests don't restate the library's default. */
 const kDefaultTimeout = codapInterface.getRequestTimeout();
@@ -206,59 +222,6 @@ describe("codapInterface.sendRequest hard timeout", () => {
   });
 });
 
-// Callers may pass a callback and discard the returned promise -- several helpers in this package
-// do, e.g. codap-helper's ensureUniqueCollectionName wraps sendRequest in a `new Promise` with no
-// reject path at all. For those callers the callback is the only signal that the request is over,
-// so it has to fire on failures too, not just on success.
-describe("codapInterface.sendRequest callback contract on failure", () => {
-  afterEach(() => {
-    jest.useRealTimers();
-    codapInterface.setRequestTimeout(kDefaultTimeout);
-  });
-
-  it("invokes the callback when the request exceeds its deadline", async () => {
-    jest.useRealTimers();
-    await initInterface();
-    const callerCallback = jest.fn();
-
-    jest.useFakeTimers();
-    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback);
-    const rejection = expect(request).rejects.toThrow(/exceeded/);
-
-    jest.advanceTimersByTime(kDefaultTimeout);
-    await rejection;
-
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
-  });
-
-  it("invokes the callback when there is no connection", async () => {
-    const fresh = await freshInterface();
-    const callerCallback = jest.fn();
-
-    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
-      .rejects.toThrow(/non-existent/);
-
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
-  });
-
-  it("invokes the callback on a connection that has been destroyed", async () => {
-    const fresh = await freshInterface();
-    const initPromise = fresh.init({ name: "test", title: "test" } as any);
-    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
-    await initPromise;
-    fresh.destroy();
-
-    const callerCallback = jest.fn();
-    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
-      .rejects.toThrow(/closed/);
-
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
-  });
-});
-
 // Two failed review rounds turned on the same question -- is the contract true on *every* path? --
 // answered each time by checking the paths someone had thought of. This enumerates them instead.
 // Every way a request can settle gets one case, and each asserts all three parts of the contract
@@ -281,14 +244,17 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     jest.useRealTimers();
     await initInterface();
     const callerCallback = jest.fn();
+    const message = { action: "get", resource: "dataContext[x]" };
 
     jest.useFakeTimers();
-    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
-                                               callerCallback);
+    const request = codapInterface.sendRequest(message, callerCallback);
     lastCallback()({ success: true, values: { id: 1 } });
 
     await expect(request).resolves.toEqual({ success: true, values: { id: 1 } });
     expectSettledOnce(callerCallback, { success: true, values: { id: 1 } });
+    // the documented second argument: "followed by the original request". Asserted here rather than
+    // in every case, where expect.anything() keeps the failure being described the settling one.
+    expect(callerCallback).toHaveBeenCalledWith(expect.anything(), message);
   });
 
   it("CODAP declines: still resolves, since {success:false} is an answer", async () => {
@@ -440,8 +406,9 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     await request;
   });
 
-  // A duplicated reply is a real possibility at the iframe-phone level, and settling once has to
-  // cover the callback as well as the promise.
+  // iframe-phone clears its pending callback as soon as it invokes it, so it will not deliver the
+  // same reply twice. This exercises the settle-once guard directly rather than a scenario the
+  // library can produce: settling once has to cover the callback, not just the promise.
   it("a duplicated reply notifies the callback only once", async () => {
     jest.useRealTimers();
     await initInterface();
@@ -484,10 +451,10 @@ describe("codapInterface.sendRequest settles every path through the contract", (
 // destroy() reports the state it puts the connection in, so getConnectionState() is honest and new
 // requests are refused. That makes init() responsible for clearing it: without the reset, the
 // handshake below would itself be refused and the connection could never be reestablished.
-// A handshake that draws no reply leaves a connection object nothing is listening to. Left in place
-// it looks live, so every later request would be sent and then wait out the full deadline -- a
-// minute per request for a plugin that has already been told it is not running inside CODAP.
-describe("codapInterface.init when the handshake fails", () => {
+// init() is the entry point every plugin calls first, and it does not go through sendRequest's
+// contract, so it needs its own coverage of the same questions: does it always settle, does it
+// report failure, and does it leave the plugin able to proceed either way.
+describe("codapInterface.init", () => {
   it("refuses later requests instead of letting each wait out the deadline", async () => {
     const fresh = await freshInterface();
     const initPromise = fresh.init({ name: "test", title: "test" } as any);
@@ -516,6 +483,26 @@ describe("codapInterface.init when the handshake fails", () => {
 
     expect(initCallback).toHaveBeenCalledTimes(1);
     expect(initCallback).toHaveBeenCalledWith(undefined);
+  });
+
+  // The handshake's own callbacks run after it settles, so what they throw is the caller's bug and
+  // not a failure to connect. Invoked before `resolve`, a throwing stateHandler would leave init()
+  // unsettled forever, with the exception discarded into a promise nothing observes.
+  it("settles even when the caller's stateHandler throws", async () => {
+    const fresh = await freshInterface();
+    const scheduled: Array<() => void> = [];
+    const spy = jest.spyOn(window, "queueMicrotask")
+                    .mockImplementation((thunk: () => void) => { scheduled.push(thunk); });
+    const boom = new Error("stateHandler bug");
+
+    const initPromise = fresh.init({ name: "test", title: "test",
+                                     stateHandler: () => { throw boom; } } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: { a: 1 } } }]);
+
+    await expect(initPromise).resolves.toEqual({ a: 1 });
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toThrow(boom);
+    spy.mockRestore();
   });
 
   it("can be retried, so a plugin is not stranded by one failed handshake", async () => {
@@ -552,10 +539,9 @@ describe("codapInterface.destroy", () => {
     await initPromise;
     fresh.destroy();
 
-    // the handler iframe-phone was constructed with, invoked as a CODAP notification would
-    const notificationHandler = (IframePhoneRpcEndpoint as jest.Mock).mock.calls[0][0];
-    notificationHandler({ action: "notify", resource: "documentChangeNotice", values: {} },
-                        () => undefined);
+    // the handler this instance's endpoint was constructed with, invoked as CODAP would
+    lastNotificationHandler()({ action: "notify", resource: "documentChangeNotice", values: {} },
+                              () => undefined);
 
     expect(fresh.getConnectionState()).toBe("closed");
     await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))

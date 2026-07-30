@@ -26,9 +26,10 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   forever, a silent no-op. It now rejects. Since the documented pattern of passing a callback and
   discarding the promise leaves nothing attached to observe that, an unhandled rejection appears
   where nothing happened before. Attach a `.catch`, even when the callback is doing the real work.
-- **A reply from CODAP with no value now fails the request** rather than waiting out the deadline.
-  It resolves nothing, because there is no result for the caller to read; resolving with `undefined`
-  would hand a caller something `result.success` throws on.
+- **An exception thrown by `init()`'s `stateHandler` or callback no longer prevents it from
+  settling.** They were invoked before the handshake's promise was resolved, so a throw from one left
+  `initializePlugin()` pending forever with the exception discarded. They are now invoked after it
+  settles, and what they throw is reported the same way a request callback's exception is.
 - **An exception thrown by a request callback is rethrown as an uncaught error** rather than being
   swallowed. The request has already settled by the time its callback runs, so a throw from it is a
   bug in the callback rather than a failure of the request — but it must not escape into the stack
@@ -69,6 +70,10 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   deadline.
 - `init()` still fails fast: the handshake rejects as soon as nothing answers it, so a plugin
   loaded outside CODAP finds out in seconds rather than after the full request timeout.
+- A reply from CODAP carrying no value still fails the request immediately, as it did before, and is
+  not left to wait out the new deadline. Keeping that took distinguishing it from iframe-phone's
+  advisory timer, which reports itself the same way — with `undefined` — and differs only in a second
+  argument the library passes for the timer alone. A `null` reply is treated the same way.
 - `destroy()` now reports the connection as `closed`, so `getConnectionState()` is accurate after
   teardown and requests issued afterwards are refused rather than reaching a null connection.
   Calling `init()` again reconnects, as before.

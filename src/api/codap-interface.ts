@@ -295,6 +295,26 @@ function describeMessage (message: unknown) {
 }
 
 /**
+ * Invokes one of `init()`'s optional callbacks, keeping what it throws out of the handshake.
+ *
+ * Same reasoning as `reportCallbackError`, which it delegates to: by the time these run the
+ * handshake has settled, so a throw from one is the caller's bug rather than a failure to connect,
+ * and it must not escape into the promise chain the handshake is resolved from — where nothing
+ * observes it, so it would be invisible.
+ */
+function notifyInitCallback (callback: ((state: any) => void) | undefined, state: any) {
+  if (!callback) { return; }
+  try {
+    const result = callback(state) as unknown;
+    if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+      (result as PromiseLike<unknown>).then(undefined, reportCallbackError);
+    }
+  } catch (error) {
+    reportCallbackError(error);
+  }
+}
+
+/**
  * Records that CODAP is talking to us — unless the caller has torn the connection down, in which
  * case traffic still arriving must not reopen a connection they closed. `destroy()` does not
  * unsubscribe from iframe-phone, and a reply to a request that was already in flight can arrive
@@ -422,34 +442,30 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
             stats.timeDiFirstReq = stats.timeDiLastReq;
           }
 
-          // Issue the request before arming the deadline, and settle if it throws. `call` can throw
-          // synchronously — an uncloneable value in the message makes postMessage raise
-          // DataCloneError. Settling here rather than letting the throw escape the executor is what
-          // keeps the callback contract true on this path: an escaped throw rejects the promise
+          // `call` can throw synchronously — an uncloneable value in the message makes postMessage
+          // raise DataCloneError. Settling here rather than letting the throw escape the executor is
+          // what keeps the callback contract true on this path: an escaped throw rejects the promise
           // without ever passing through settle(), so the caller's callback would never fire.
           //
-          // Two things this ordering buys, both load-bearing. Arming the deadline first would leave
-          // the timer live after such a throw, to fire a spurious failure a minute later. And
-          // `break` here is what keeps that from happening now: without it control would fall
-          // through and arm a deadline on a request that has already settled.
-          //
-          // Nothing can settle before the timer exists, because iframe-phone never invokes the
-          // callback synchronously — it stores the callback, arms its own 2s timer, then posts.
+          // The deadline is armed inside the same `try`, after the call, so a throw skips it: there
+          // is then no timer to outlive a request that has already settled, and no ordering for a
+          // later edit to get wrong. Nothing can settle before the timer exists, because iframe-phone
+          // never invokes the callback synchronously — it stores the callback, arms its own 2s timer,
+          // and posts.
           try {
             connection.call(message, handleResponse);
+
+            // Capture the deadline this request was given, so a later setRequestTimeout() can't
+            // make the reported duration disagree with the timer that actually fired.
+            const timeout = requestTimeout;
+            timeoutTimer = setTimeout(function () {
+              stats.countDiReqDeadlineExceeded++;
+              settleFailure("sendRequest: CODAP request exceeded " + timeout + "ms: " +
+                  describeMessage(message));
+            }, timeout);
           } catch (error) {
             settleFailure(error);
-            break;
           }
-
-          // Capture the deadline this request was given, so a later setRequestTimeout() can't
-          // make the reported duration disagree with the timer that actually fired.
-          const timeout = requestTimeout;
-          timeoutTimer = setTimeout(function () {
-            stats.countDiReqDeadlineExceeded++;
-            settleFailure("sendRequest: CODAP request exceeded " + timeout + "ms: " +
-                describeMessage(message));
-          }, timeout);
         } else {
           // Nothing will ever call back, so settle now rather than leaving the caller waiting
           // forever — the same guarantee the deadline provides once a request is in flight.
@@ -495,9 +511,7 @@ export const codapInterface = {
         connectionState = "closed";
         reject(reason instanceof Error ? reason : new Error(String(reason)));
         // the callback reports every outcome, as sendRequest's does; there is no state to pass on
-        if (iCallback) {
-          iCallback(undefined);
-        }
+        notifyInitCallback(iCallback, undefined);
       }
 
       function getFrameRespHandler(resp: { values: { error: any; savedState: any }; success: boolean }[]) {
@@ -508,14 +522,14 @@ export const codapInterface = {
         const savedState = receivedFrame && receivedFrame.savedState;
         this_.updateInteractiveState(savedState);
         if (success) {
-          // deprecated way of conveying state
-          if (iConfig.stateHandler) {
-            iConfig.stateHandler(savedState);
-          }
+          // Settle before handing control to the caller's handlers, and keep what they throw out of
+          // this promise — the same contract sendRequest's callback has, for the same reason. Called
+          // the other way round, a stateHandler that threw would leave init() unsettled forever and
+          // its exception discarded, because nothing observes the promise this handler returns into.
           resolve(savedState);
-          if (iCallback) {
-            iCallback(savedState);
-          }
+          // deprecated way of conveying state
+          notifyInitCallback(iConfig.stateHandler, savedState);
+          notifyInitCallback(iCallback, savedState);
         } else {
           failHandshake((resp[1] && resp[1].values && resp[1].values.error) || "unknown failure");
         }
@@ -659,8 +673,9 @@ export const codapInterface = {
    *   includes `{success: false}`, which means CODAP answered and declined — a resolved promise, not
    *   a rejected one.
    * - **The request failed:** the promise rejects with an `Error` and the callback is invoked with
-   *   `undefined`. This covers exceeding the deadline, there being no connection to send on (before
-   *   `initializePlugin()` or after `destroy()`), and CODAP answering with no value at all.
+   *   `undefined`. Every way a request can fail reports this way — exceeding the deadline, there
+   *   being no connection to send on (before `initializePlugin()` or after `destroy()`), CODAP
+   *   answering with no value at all, and the send itself throwing.
    *
    * The callback is invoked exactly once, after the promise has settled. A callback written as
    * `result.success` therefore has to handle the `undefined` it receives on failure. Note that the
