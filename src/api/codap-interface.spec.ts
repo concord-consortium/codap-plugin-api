@@ -1,28 +1,44 @@
+import { IframePhoneRpcEndpoint } from "iframe-phone";
 import { codapInterface } from "./codap-interface";
 
 // iframe-phone invokes the callback passed to `call()` with `undefined` when its hard-coded 2s
 // timer expires, but it does NOT cancel the request or forget the callback — when CODAP finally
 // replies it invokes the same callback a second time with the real value. These tests capture
 // that callback so both invocations can be simulated.
+//
+// The two invocations are distinguishable, and these tests rely on it exactly as the code does:
+// iframe-phone passes a second argument for the advisory timer only
+// (`iframe-phone-rpc-endpoint.js`: `callback(undefined, new Error(...))` for the timer,
+// `callback.call(undefined, message.value)` for the real reply). `advisoryTimeout` below is the
+// only way these tests simulate the timer, so a bare `callback(undefined)` in a test means what it
+// means in production: CODAP answered with no value.
 const mockCall = jest.fn();
 
 jest.mock("iframe-phone", () => ({
   IframePhoneRpcEndpoint: jest.fn().mockImplementation(() => ({
-    call: (message: any, callback: (response: any) => void) => mockCall(message, callback)
+    call: (message: any, callback: (response: any, noReplyYet?: Error) => void) =>
+            mockCall(message, callback)
   }))
 }));
 
 /** Captured before any test mutates it, so these tests don't restate the library's default. */
 const kDefaultTimeout = codapInterface.getRequestTimeout();
 
+type PhoneCallback = (response: any, noReplyYet?: Error) => void;
+
 /** The callback iframe-phone would hold for the nth request, in call order. */
-function callbackAt(index: number): (response: any) => void {
+function callbackAt(index: number): PhoneCallback {
   return mockCall.mock.calls[index][1];
 }
 
 /** The callback iframe-phone would hold for the most recent request. */
-function lastCallback(): (response: any) => void {
+function lastCallback(): PhoneCallback {
   return callbackAt(mockCall.mock.calls.length - 1);
+}
+
+/** Simulates iframe-phone's advisory 2s timer firing, exactly as the library reports it. */
+function advisoryTimeout(callback: PhoneCallback) {
+  callback(undefined, new Error("IframePhone timed out waiting for reply"));
 }
 
 /** Resolves after pending microtasks flush, so promise settlement can be observed. */
@@ -56,7 +72,7 @@ describe("codapInterface.sendRequest", () => {
     const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
     const callback = lastCallback();
 
-    callback(undefined);              // advisory timeout — the request is still in flight
+    advisoryTimeout(callback);        // the request is still in flight
     await flush();
     callback({ success: true, values: { itemIDs: ["a", "b"] } });   // CODAP finally replies
 
@@ -68,7 +84,7 @@ describe("codapInterface.sendRequest", () => {
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback);
     const callback = lastCallback();
 
-    callback(undefined);
+    advisoryTimeout(callback);
     await flush();
     expect(callerCallback).not.toHaveBeenCalled();
 
@@ -104,9 +120,9 @@ describe("codapInterface.sendRequest hard timeout", () => {
     async () => {
       jest.useFakeTimers();
       const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
-      const rejection = expect(request).rejects.toMatch(/exceeded/);
+      const rejection = expect(request).rejects.toThrow(/exceeded/);
 
-      lastCallback()(undefined);              // advisory timeout — must not settle
+      advisoryTimeout(lastCallback());        // advisory timeout — must not settle
       jest.advanceTimersByTime(kDefaultTimeout);   // hard deadline elapses
 
       await rejection;
@@ -116,7 +132,7 @@ describe("codapInterface.sendRequest hard timeout", () => {
     codapInterface.setRequestTimeout(5000);
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
-    const rejection = expect(request).rejects.toMatch(/exceeded/);
+    const rejection = expect(request).rejects.toThrow(/exceeded/);
 
     jest.advanceTimersByTime(5000);
 
@@ -145,7 +161,7 @@ describe("codapInterface.sendRequest hard timeout", () => {
       codapInterface.setRequestTimeout(5000);
       jest.useFakeTimers();
       const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
-      const rejection = expect(request).rejects.toMatch(/exceeded 5000ms/);
+      const rejection = expect(request).rejects.toThrow(/exceeded 5000ms/);
 
       codapInterface.setRequestTimeout(30000);   // must not change this request's report
       jest.advanceTimersByTime(5000);
@@ -154,10 +170,12 @@ describe("codapInterface.sendRequest hard timeout", () => {
     });
 
   // `connection.call` can throw synchronously -- an uncloneable value in the message makes
-  // postMessage raise DataCloneError -- and that rejects the promise directly, without going
-  // through settle(). A deadline armed before the call would survive that and fire a minute later,
-  // reporting a failure the caller had already handled.
-  it("leaves no deadline behind when the request throws synchronously", async () => {
+  // postMessage raise DataCloneError. Left to escape the executor it would reject the promise
+  // without passing through settle(), which is the one path on which the callback contract could
+  // still be false: the caller would get a rejection and no notification. It is also why the
+  // deadline is armed after the call rather than before -- armed first, the timer would outlive the
+  // throw and report a failure a minute after the caller had handled it.
+  it("settles through the contract when the request throws synchronously", async () => {
     const callerCallback = jest.fn();
     mockCall.mockImplementationOnce(() => {
       throw new DOMException("value could not be cloned", "DataCloneError");
@@ -167,9 +185,13 @@ describe("codapInterface.sendRequest hard timeout", () => {
     await expect(codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" },
                                             callerCallback)).rejects.toThrow(/cloned/);
 
+    expect(callerCallback).toHaveBeenCalledTimes(1);
+    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
+
+    // no deadline was armed, so nothing can fire later against a request that has already settled
     expect(jest.getTimerCount()).toBe(0);
     jest.advanceTimersByTime(kDefaultTimeout);
-    expect(callerCallback).not.toHaveBeenCalled();
+    expect(callerCallback).toHaveBeenCalledTimes(1);
   });
 
   it("clears the deadline once the request has resolved", async () => {
@@ -201,7 +223,7 @@ describe("codapInterface.sendRequest callback contract on failure", () => {
 
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback);
-    const rejection = expect(request).rejects.toMatch(/exceeded/);
+    const rejection = expect(request).rejects.toThrow(/exceeded/);
 
     jest.advanceTimersByTime(kDefaultTimeout);
     await rejection;
@@ -215,10 +237,264 @@ describe("codapInterface.sendRequest callback contract on failure", () => {
     const callerCallback = jest.fn();
 
     await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
-      .rejects.toMatch(/non-existent/);
+      .rejects.toThrow(/non-existent/);
 
     expect(callerCallback).toHaveBeenCalledTimes(1);
     expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
+  });
+
+  it("invokes the callback on a connection that has been destroyed", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+    fresh.destroy();
+
+    const callerCallback = jest.fn();
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
+      .rejects.toThrow(/closed/);
+
+    expect(callerCallback).toHaveBeenCalledTimes(1);
+    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
+  });
+});
+
+// Two failed review rounds turned on the same question -- is the contract true on *every* path? --
+// answered each time by checking the paths someone had thought of. This enumerates them instead.
+// Every way a request can settle gets one case, and each asserts all three parts of the contract
+// together: how the promise settles, that the callback fires exactly once with the documented
+// argument, and that no deadline is left behind to fire against a settled request.
+describe("codapInterface.sendRequest settles every path through the contract", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    codapInterface.setRequestTimeout(kDefaultTimeout);
+  });
+
+  /** Asserts the parts of the contract that hold no matter how a request settles. */
+  function expectSettledOnce(callerCallback: jest.Mock, response: any) {
+    expect(callerCallback).toHaveBeenCalledTimes(1);
+    expect(callerCallback).toHaveBeenCalledWith(response, expect.anything());
+    expect(jest.getTimerCount()).toBe(0);
+  }
+
+  it("CODAP answers: resolves with the response, callback gets it", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    lastCallback()({ success: true, values: { id: 1 } });
+
+    await expect(request).resolves.toEqual({ success: true, values: { id: 1 } });
+    expectSettledOnce(callerCallback, { success: true, values: { id: 1 } });
+  });
+
+  it("CODAP declines: still resolves, since {success:false} is an answer", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    lastCallback()({ success: false, values: { error: "no such thing" } });
+
+    await expect(request).resolves.toEqual({ success: false, values: { error: "no such thing" } });
+    expectSettledOnce(callerCallback, { success: false, values: { error: "no such thing" } });
+  });
+
+  // The distinction the whole design rests on: iframe-phone's probe is not an outcome, but a reply
+  // of `undefined` from CODAP is -- and it used to be indistinguishable, so it waited out the full
+  // deadline. There is no result to hand back, so it fails rather than resolving with `undefined`.
+  it("CODAP answers with no value: rejects rather than resolving with undefined", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const before = codapInterface.getStats().countDiRplFail;
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    lastCallback()(undefined);          // one argument: a real reply, with no value
+
+    await expect(request).rejects.toThrow(/answered with no result/);
+    expectSettledOnce(callerCallback, undefined);
+    expect(codapInterface.getStats().countDiRplFail).toBe(before + 1);
+  });
+
+  it("the deadline passes: rejects, and says so in the stats", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const before = codapInterface.getStats().countDiReqDeadlineExceeded;
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    const rejection = expect(request).rejects.toThrow(/exceeded/);
+    jest.advanceTimersByTime(kDefaultTimeout);
+    await rejection;
+
+    expectSettledOnce(callerCallback, undefined);
+    expect(codapInterface.getStats().countDiReqDeadlineExceeded).toBe(before + 1);
+  });
+
+  it("the request throws on the way out: rejects with what was thrown", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+    mockCall.mockImplementationOnce(() => {
+      throw new DOMException("value could not be cloned", "DataCloneError");
+    });
+
+    jest.useFakeTimers();
+    await expect(codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                            callerCallback)).rejects.toThrow(/cloned/);
+
+    expectSettledOnce(callerCallback, undefined);
+  });
+
+  it("there is no connection: rejects without waiting", async () => {
+    const fresh = await freshInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
+      .rejects.toThrow(/non-existent/);
+
+    expectSettledOnce(callerCallback, undefined);
+  });
+
+  it("the connection was destroyed: rejects without waiting", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+    fresh.destroy();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
+      .rejects.toThrow(/closed/);
+
+    expectSettledOnce(callerCallback, undefined);
+  });
+
+  // Not a settling path: the probe reports that nothing has settled yet, so the contract's
+  // "exactly once" has to mean the callback stays silent here.
+  it("the advisory probe is not an outcome: nothing settles, callback stays silent", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    let settled = false;
+    request.then(() => (settled = true), () => (settled = true));
+
+    advisoryTimeout(lastCallback());
+    await flush();
+
+    expect(settled).toBe(false);
+    expect(callerCallback).not.toHaveBeenCalled();
+
+    lastCallback()({ success: true });     // settle it so no deadline outlives the test
+    await request;
+  });
+
+  // A duplicated reply is a real possibility at the iframe-phone level, and settling once has to
+  // cover the callback as well as the promise.
+  it("a duplicated reply notifies the callback only once", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    const callback = lastCallback();
+    callback({ success: true, values: 1 });
+    callback({ success: true, values: 2 });
+
+    await expect(request).resolves.toEqual({ success: true, values: 1 });
+    expectSettledOnce(callerCallback, { success: true, values: 1 });
+  });
+
+  // A reply can arrive after the deadline has already failed the request. It must not revive it,
+  // report a success against it, or mark a connection the caller has given up on as live.
+  it("a reply after the deadline changes nothing", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    const callback = lastCallback();
+    const rejection = expect(request).rejects.toThrow(/exceeded/);
+    jest.advanceTimersByTime(kDefaultTimeout);
+    await rejection;
+
+    const after = { ...codapInterface.getStats() };
+    callback({ success: true });
+
+    expect(codapInterface.getStats()).toEqual(after);
+    expectSettledOnce(callerCallback, undefined);
+  });
+});
+
+// destroy() reports the state it puts the connection in, so getConnectionState() is honest and new
+// requests are refused. That makes init() responsible for clearing it: without the reset, the
+// handshake below would itself be refused and the connection could never be reestablished.
+describe("codapInterface.destroy", () => {
+  it("reports the connection as closed", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+    expect(fresh.getConnectionState()).toBe("active");
+
+    fresh.destroy();
+
+    expect(fresh.getConnectionState()).toBe("closed");
+  });
+
+  // destroy() does not unsubscribe from iframe-phone, so CODAP can still deliver a notification
+  // afterwards. Handling it must not reopen a connection the caller has closed.
+  it("stays closed when a notification arrives after teardown", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+    fresh.destroy();
+
+    // the handler iframe-phone was constructed with, invoked as a CODAP notification would
+    const notificationHandler = (IframePhoneRpcEndpoint as jest.Mock).mock.calls[0][0];
+    notificationHandler({ action: "notify", resource: "documentChangeNotice", values: {} },
+                        () => undefined);
+
+    expect(fresh.getConnectionState()).toBe("closed");
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
+      .rejects.toThrow(/closed/);
+  });
+
+  it("can be followed by init(), so a plugin can reconnect after teardown", async () => {
+    const fresh = await freshInterface();
+    const firstInit = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await firstInit;
+
+    fresh.destroy();
+
+    const secondInit = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await expect(secondInit).resolves.toBeDefined();
+
+    // and requests work again, rather than being refused by the state destroy() left behind
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
   });
 });
 
@@ -279,7 +555,7 @@ describe("codapInterface.sendRequest callback errors", () => {
     const boom = new Error("callback bug");
 
     await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" },
-                                   () => { throw boom; })).rejects.toMatch(/non-existent/);
+                                   () => { throw boom; })).rejects.toThrow(/non-existent/);
 
     expect(scheduled).toHaveLength(1);
     expect(scheduled[0]).toThrow(boom);
@@ -294,9 +570,9 @@ describe("codapInterface.init handshake", () => {
     const fresh = await freshInterface();
 
     const initPromise = fresh.init({ name: "test", title: "test" } as any);
-    lastCallback()(undefined);          // iframe-phone's 2s advisory timeout, nothing there
+    advisoryTimeout(lastCallback());    // iframe-phone's 2s advisory timeout, nothing there
 
-    await expect(initPromise).rejects.toMatch(/timed out/);
+    await expect(initPromise).rejects.toThrow(/timed out/);
   });
 
   // The fast-fail belongs to the handshake request itself, not to a window of time: an ordinary
@@ -311,7 +587,7 @@ describe("codapInterface.init handshake", () => {
       let settled = false;
       request.then(() => (settled = true), () => (settled = true));
 
-      callbackAt(1)(undefined);   // the ordinary request's advisory timeout
+      advisoryTimeout(callbackAt(1));   // the ordinary request's advisory timeout
       await flush();
 
       expect(settled).toBe(false);
@@ -334,7 +610,7 @@ describe("codapInterface.init handshake", () => {
     request.then(() => (settled = true), () => (settled = true));
 
     const callback = lastCallback();
-    callback(undefined);
+    advisoryTimeout(callback);
     await flush();
 
     expect(settled).toBe(false);
@@ -353,7 +629,7 @@ describe("codapInterface.sendRequest without a connection", () => {
     const fresh = await freshInterface();
 
     await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
-      .rejects.toMatch(/non-existent CODAP connection/);
+      .rejects.toThrow(/non-existent CODAP connection/);
   });
 });
 
@@ -368,7 +644,7 @@ describe("codapInterface stats", () => {
     const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
     const callback = lastCallback();
 
-    callback(undefined);
+    advisoryTimeout(callback);
     await flush();
     expect(fresh.getStats().countDiRplTimeout).toBe(before + 1);
 

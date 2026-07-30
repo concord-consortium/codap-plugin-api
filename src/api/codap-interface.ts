@@ -42,12 +42,21 @@
  */
 
 import { IframePhoneRpcEndpoint } from "iframe-phone";
+// type-only, so the cycle with codap-helper (which imports codapInterface from here) is erased
+import type { IResult } from "./codap-helper";
 
 /**
  * The CODAP Connection
  * @param {iframePhone.IframePhoneRpcEndpoint}
+ *
+ * The callback signature spells out both arguments iframe-phone passes. It invokes the callback
+ * with the reply alone when CODAP answers, and with `(undefined, Error)` when its own advisory 2s
+ * timer expires — the second argument is the only thing distinguishing that probe from CODAP
+ * answering with no value, so an annotation taking one argument silently discards the distinction.
  */
-let connection: { call: (arg0: any, arg1: (response: any) => void) => void; } | null = null;
+let connection: {
+  call: (message: any, callback: (response: any, noReplyYet?: Error) => void) => void;
+} | null = null;
 
 let connectionState = "preinit";
 
@@ -74,7 +83,16 @@ const stats = {
   countDiReq: 0,
   countDiRplSuccess: 0,
   countDiRplFail: 0,
+  /**
+   * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
+   *
+   * This counts probes, not failures. A request slower than 2s that goes on to succeed normally
+   * increments it, so on a plugin doing bulk work a high count is expected and says nothing is
+   * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
+   */
   countDiRplTimeout: 0,
+  /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+  countDiReqDeadlineExceeded: 0,
   countCodapReq: 0,
   countCodapUnhandledReq: 0,
   countCodapRplSuccess: 0,
@@ -134,7 +152,12 @@ function notificationHandler (request: { action: any; resource: any; values: any
   let requestValues = request.values;
   let returnMessage = {success: true};
 
-  connectionState = "active";
+  // CODAP is talking to us, so the connection is live — unless we have torn it down, in which case
+  // a notification still arriving (destroy() does not unsubscribe from iframe-phone) must not
+  // reopen a connection the caller has closed.
+  if (connection) {
+    connectionState = "active";
+  }
   stats.countCodapReq += 1;
   stats.timeCodapLastReq = new Date();
   if (!stats.timeCodapFirstReq) {
@@ -196,7 +219,9 @@ function notificationHandler (request: { action: any; resource: any; values: any
 
 interface IRequestOptions {
   /**
-   * Invoked with the response on success and with `undefined` on failure.
+   * Invoked with the response on success and with `undefined` on failure. See `sendRequest`, whose
+   * JSDoc carries this contract for consumers — this interface is module-private and never reaches
+   * the published type declarations.
    *
    * TODO: type this as `(response?: IResult, request?: any) => void`. As `any` it accepts a
    * consumer's `(result: IResult) => result.success`, which compiles and then throws the first time
@@ -223,9 +248,10 @@ interface IRequestOptions {
  * By the time the callback runs its request has already settled, so what it throws is not the
  * request's failure and must not escape into the stack that invoked it — iframe-phone's message
  * listener (where a throw skips its own bookkeeping), the deadline timer, or the promise executor
- * (which discards it silently, since the promise has settled). Rethrowing on a fresh task keeps it
- * out of all three while leaving it an uncaught error, so `window.onerror` and error reporters
- * still see it: logging it instead would hide a consumer's bug from the monitoring they rely on.
+ * (which discards it silently, since the promise has settled). Rethrowing from a microtask keeps it
+ * out of all three, since those stacks have unwound by the time it runs, while leaving it an
+ * uncaught error that `window.onerror` and error reporters still see: logging it instead would hide
+ * a consumer's bug from the monitoring they rely on.
  */
 function reportCallbackError (error: unknown) {
   queueMicrotask(() => { throw error; });
@@ -244,7 +270,12 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
     // with the response on success, and with `undefined` on failure. Callers may pass a callback
     // and discard the promise — several helpers in this package do — so for them the callback is
     // the only signal that the request is over.
-    function settle (settleFn: (value?: any) => void, value: any, callbackResponse?: any) {
+    //
+    // Success and failure go through separate entry points rather than one function with an
+    // optional callback argument: what the callback receives is then fixed by which one is called,
+    // so a path added later cannot resolve the promise correctly while notifying its callback with
+    // `undefined`.
+    function settle (settleFn: (value?: any) => void, value: any, callbackResponse?: IResult) {
       if (isSettled) { return; }
       isSettled = true;
       if (timeoutTimer !== undefined) { clearTimeout(timeoutTimer); }
@@ -265,17 +296,50 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
       }
     }
 
-    function handleResponse (response: {success: boolean} | undefined) {
+    function settleSuccess (response: IResult) {
+      settle(resolve, response, response);
+    }
+
+    /**
+     * Fails the request. Rejects with an Error — never a string — so a consumer's `.catch` gets a
+     * stack, and so every rejection from this module has one shape to handle. Takes `unknown` so
+     * that a caught exception can be passed straight through without each call site repeating the
+     * same normalization.
+     */
+    function settleFailure (reason: unknown) {
+      settle(reject, reason instanceof Error ? reason : new Error(String(reason)));
+    }
+
+    /**
+     * @param response CODAP's reply, or `undefined` if there is none yet.
+     * @param noReplyYet present only when iframe-phone is reporting that its own advisory 2s timer
+     *    expired. That is a liveness probe, not a completion deadline: the request is still in
+     *    flight and the real reply will arrive at this same callback. A genuinely empty reply from
+     *    CODAP arrives as `undefined` with this argument absent, which is a real answer and settles
+     *    the request at once. See `connection`'s type for why this argument has to be declared.
+     */
+    function handleResponse (response: IResult | undefined, noReplyYet?: Error) {
+      // A reply can still arrive after the deadline rejected the request. Returning early keeps it
+      // from marking the connection active or counting a success against a request the caller has
+      // already been told failed.
+      if (isSettled) { return; }
+
       if (response === undefined) {
-        // iframe-phone's advisory timer expired; the reply is still coming. See kDefaultRequestTimeout.
-        // TODO: a request CODAP genuinely answers with no value arrives here identically, and now
-        // waits out the full deadline rather than failing in ~2s. iframe-phone does distinguish the
-        // two — its advisory call passes a second argument, `callback(undefined, new Error(
-        // "IframePhone timed out waiting for reply"))` — which this handler discards.
-        stats.countDiRplTimeout++;
-        if (failFastWithoutReply) {
-          settle(reject, "handleResponse: CODAP request timed out: " + JSON.stringify(message));
+        if (noReplyYet) {
+          // Nothing has answered within iframe-phone's advisory 2s. The request is still in flight,
+          // so this is not an outcome — except during the handshake, where silence is the answer.
+          stats.countDiRplTimeout++;
+          if (failFastWithoutReply) {
+            settleFailure("handleResponse: CODAP request timed out: " + JSON.stringify(message));
+          }
+          return;
         }
+        // CODAP answered, with no value. That is a real answer and settles the request, but there
+        // is no result for the caller to read, so it fails rather than resolving with `undefined`
+        // and handing the caller something `result.success` throws on.
+        connectionState = "active";
+        stats.countDiRplFail++;
+        settleFailure("handleResponse: CODAP answered with no result: " + JSON.stringify(message));
         return;
       }
       connectionState = "active";
@@ -283,13 +347,13 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
       // every successful init() handshake is counted a failure here. These counters are diagnostic
       // only, but they mislead whoever reads getStats() to find out why a plugin is misbehaving.
       if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
-      settle(resolve, response, response);
+      settleSuccess(response);
     }
 
     switch (connectionState) {
       case "closed": // log the message and ignore
         // console.warn('sendRequest on closed CODAP connection: ' + JSON.stringify(message));
-        settle(reject, "sendRequest on closed CODAP connection: " + JSON.stringify(message));
+        settleFailure("sendRequest on closed CODAP connection: " + JSON.stringify(message));
         break;
       case "preinit": // warn, but issue request.
         // console.log('sendRequest on not yet initialized CODAP connection: ' +
@@ -303,25 +367,38 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
             stats.timeDiFirstReq = stats.timeDiLastReq;
           }
 
-          // Issue the request before arming the deadline. `call` can throw synchronously — an
-          // uncloneable value in the message makes postMessage raise DataCloneError — and that
-          // throw rejects this promise directly, without going through settle(). A timer armed
-          // first would survive that, and fire a spurious failure at the deadline. iframe-phone
-          // never invokes the callback synchronously, so nothing can settle before the timer
-          // exists.
-          connection.call(message, handleResponse);
+          // Issue the request before arming the deadline, and settle if it throws. `call` can throw
+          // synchronously — an uncloneable value in the message makes postMessage raise
+          // DataCloneError. Settling here rather than letting the throw escape the executor is what
+          // keeps the callback contract true on this path: an escaped throw rejects the promise
+          // without ever passing through settle(), so the caller's callback would never fire.
+          //
+          // Two things this ordering buys, both load-bearing. Arming the deadline first would leave
+          // the timer live after such a throw, to fire a spurious failure a minute later. And
+          // `break` here is what keeps that from happening now: without it control would fall
+          // through and arm a deadline on a request that has already settled.
+          //
+          // Nothing can settle before the timer exists, because iframe-phone never invokes the
+          // callback synchronously — it stores the callback, arms its own 2s timer, then posts.
+          try {
+            connection.call(message, handleResponse);
+          } catch (error) {
+            settleFailure(error);
+            break;
+          }
 
           // Capture the deadline this request was given, so a later setRequestTimeout() can't
           // make the reported duration disagree with the timer that actually fired.
           const timeout = requestTimeout;
           timeoutTimer = setTimeout(function () {
-            settle(reject, "sendRequest: CODAP request exceeded " + timeout + "ms: " +
+            stats.countDiReqDeadlineExceeded++;
+            settleFailure("sendRequest: CODAP request exceeded " + timeout + "ms: " +
                 JSON.stringify(message));
           }, timeout);
         } else {
           // Nothing will ever call back, so settle now rather than leaving the caller waiting
           // forever — the same guarantee the deadline provides once a request is in flight.
-          settle(reject, "sendRequest on non-existent CODAP connection: " + JSON.stringify(message));
+          settleFailure("sendRequest on non-existent CODAP connection: " + JSON.stringify(message));
         }
     }
   });
@@ -394,6 +471,10 @@ export const codapInterface = {
       // initialize connection
       connection = new IframePhoneRpcEndpoint(
           notificationHandler, "data-interactive", window.parent);
+      // Reset the state, so that initializing again after destroy() works. Without this the
+      // handshake below would be refused by the `case "closed"` branch in issueRequest, and the
+      // connection could never be reestablished.
+      connectionState = "preinit";
 
       if (!config.customInteractiveStateHandler) {
         this_.on("get", "interactiveState", function () {
@@ -468,25 +549,45 @@ export const codapInterface = {
     interactiveState = Object.assign(interactiveState, iInteractiveState);
   },
 
+  /**
+   * Tears down the connection to CODAP. Requests issued afterwards are refused rather than sent;
+   * `init()` can be called again to reconnect.
+   */
   destroy () {
-    // TODO: settle the requests still in flight. Nulling the connection leaves each of them to wait
-    // out its full deadline — a minute in which the caller holds its payload alive after the plugin
-    // is gone, ending in a rejection that can surface against a re-initialized instance. They used
-    // to fail within iframe-phone's ~2s by accident. Settling them needs a registry of in-flight
-    // requests, since `isSettled` and `timeoutTimer` are locals inside each issueRequest executor;
-    // a destroyed connection should refuse new requests too, which `connectionState = "closed"`
-    // would do.
+    // TODO: settle the requests still in flight. Each of them waits out its full deadline instead —
+    // a minute in which the caller holds its payload alive after the plugin is gone, ending in a
+    // rejection that can surface against a re-initialized instance. They used to fail within
+    // iframe-phone's ~2s by accident. Settling them needs a registry of in-flight requests, since
+    // `isSettled` and `timeoutTimer` are locals inside each issueRequest executor.
     connection = null;
+    // Report the state the caller put us in, so getConnectionState() is honest after teardown and
+    // new requests are refused rather than reaching a null connection. init() resets this.
+    connectionState = "closed";
   },
 
   /**
    * Sends a request to CODAP. The format of the message is as defined in
    * {@link https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-API}.
    *
-   * @param message {String}
-   * @param callback {function(response, request)} Optional callback to handle
-   *    the CODAP response. Note both the response and the initial request will
-   *    sent.
+   * A request waits up to `getRequestTimeout()` milliseconds (60 seconds by default) for CODAP to
+   * answer. It settles exactly once, and both the promise and the callback report every outcome:
+   *
+   * - **CODAP answered:** the promise resolves with the response and the callback receives it. That
+   *   includes `{success: false}`, which means CODAP answered and declined — a resolved promise, not
+   *   a rejected one.
+   * - **The request failed:** the promise rejects with an `Error` and the callback is invoked with
+   *   `undefined`. This covers exceeding the deadline, there being no connection to send on (before
+   *   `initializePlugin()` or after `destroy()`), and CODAP answering with no value at all.
+   *
+   * The callback is invoked exactly once, after the promise has settled. A callback written as
+   * `result.success` therefore has to handle the `undefined` it receives on failure. Note that the
+   * promise rejects whether or not a callback is passed, so it still needs a `.catch` to avoid an
+   * unhandled rejection. An exception thrown by the callback itself is rethrown as an uncaught error
+   * rather than failing the request, which has already settled by then.
+   *
+   * @param message {Object} The request, as in the Data Interactive API.
+   * @param callback {function(response, request)} Optional. Receives the response, or `undefined`
+   *    if the request failed, followed by the original request.
    *
    * @return {Promise} The promise of the response from CODAP.
    */
