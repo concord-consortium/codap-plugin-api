@@ -62,8 +62,10 @@ codapInterface.sendRequest(message, result => { /* ... */ })
 ```
 
 The deadline applies to each request separately, so a helper that chains several can take a multiple
-of it. `createCollectionFromAttribute`, which issues up to three requests in sequence, is the
-practical case.
+of it. `createCollectionFromAttribute` is the case to know about: when it has to find an unused name
+for the new collection it searches for one suffix at a time, up to 104 requests in sequence, so its
+worst case is that multiple of the deadline. That worst case needs a document already holding a
+hundred similarly-named collections; the ordinary path is four requests.
 
 ### Exceptions thrown by your callback
 

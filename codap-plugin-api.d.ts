@@ -29,9 +29,24 @@ declare const codapInterface: {
      * Connection statistics
      */
     stats: {
+        /** How many requests were sent to CODAP. */
         countDiReq: number;
+        /** How many requests CODAP answered with `{success: true}`. */
         countDiRplSuccess: number;
+        /**
+         * How many requests CODAP answered with `{success: false}` — that is, answered and declined.
+         * These are outcomes, not failures: the request's promise resolves with the response. For
+         * requests that failed, see `countDiReqFailed`.
+         */
         countDiRplFail: number;
+        /**
+         * How many requests failed, and so rejected: no connection to send on, no answer within the
+         * deadline, an answer carrying no result, or the send itself throwing.
+         *
+         * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
+         * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.
+         */
+        countDiReqFailed: number;
         /**
          * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
          *
@@ -40,7 +55,10 @@ declare const codapInterface: {
          * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
          */
         countDiRplTimeout: number;
-        /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+        /**
+         * How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. A subset
+         * of `countDiReqFailed`.
+         */
         countDiReqDeadlineExceeded: number;
         countCodapReq: number;
         countCodapUnhandledReq: number;
@@ -91,9 +109,24 @@ declare const codapInterface: {
      */
     setRequestTimeout(timeout: number): void;
     getStats(): {
+        /** How many requests were sent to CODAP. */
         countDiReq: number;
+        /** How many requests CODAP answered with `{success: true}`. */
         countDiRplSuccess: number;
+        /**
+         * How many requests CODAP answered with `{success: false}` — that is, answered and declined.
+         * These are outcomes, not failures: the request's promise resolves with the response. For
+         * requests that failed, see `countDiReqFailed`.
+         */
         countDiRplFail: number;
+        /**
+         * How many requests failed, and so rejected: no connection to send on, no answer within the
+         * deadline, an answer carrying no result, or the send itself throwing.
+         *
+         * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
+         * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.
+         */
+        countDiReqFailed: number;
         /**
          * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
          *
@@ -102,7 +135,10 @@ declare const codapInterface: {
          * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
          */
         countDiRplTimeout: number;
-        /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+        /**
+         * How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. A subset
+         * of `countDiReqFailed`.
+         */
         countDiReqDeadlineExceeded: number;
         countCodapReq: number;
         countCodapUnhandledReq: number;

@@ -16,8 +16,11 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   `TypeError` at the 2s mark before succeeding normally, and a callback relying on being told about
   failure never was. Callbacks now need to handle `undefined`, which is the shape of a failure.
 - **A failed request rejects with an `Error`**, where it previously rejected with a string. Anything
-  matching on the rejection value (`error.startsWith(...)`, `error === "..."`) needs updating; the
-  message text is unchanged, so `String(error)` and `error.message` carry what the string did.
+  matching on the rejection value (`error.startsWith(...)`, `error === "..."`) needs updating, and
+  `error.message` is where the text now lives — note that `String(error)` prefixes it with `Error: `.
+  Some of the text changed too: a request that outlives its deadline now reports
+  `sendRequest: CODAP request exceeded 60000ms: …` rather than
+  `handleResponse: CODAP request timed out: …`, which is reserved for the handshake.
 - **`sendRequest` rejects on paths that previously never settled at all.** With no connection —
   before `initializePlugin()` or after `destroy()` — it used to return a promise that stayed pending
   forever, a silent no-op. It now rejects. Since the documented pattern of passing a callback and
@@ -48,6 +51,13 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   declared return type narrows from `Promise<unknown>` to `Promise<IResult>`, which is
   source-compatible for anyone casting the result.
 
+- **A failed `init()` handshake now closes the connection**, and its optional callback is invoked
+  with `undefined` rather than being skipped. Previously a handshake that drew no reply left a
+  connection object behind that nothing was listening to, so every subsequent request was sent and
+  then waited out the full deadline — a minute apiece for a plugin that had already been told it was
+  not running inside CODAP. Those requests are now refused at once. `init()` can be called again to
+  retry, and it rejects with an `Error` like every other failure.
+
 ### Changed
 
 - **A request now waits up to 60 seconds for a CODAP response, rather than about 2 seconds.**
@@ -66,10 +76,12 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
 ### Added
 
 - `codapInterface.getRequestTimeout()` and `codapInterface.setRequestTimeout(ms)`.
-- `stats.countDiReqDeadlineExceeded`, the number of requests that ran out of time. `getStats()`
-  previously reported no counter for them at all, while `countDiRplTimeout` counts iframe-phone's
-  advisory probe — which fires for every request slower than 2s and so is expected to be non-zero on
-  a plugin doing bulk work. Both are documented in the published type declarations.
+- `stats.countDiReqFailed`, the number of requests that failed, and `stats.countDiReqDeadlineExceeded`
+  for the subset that ran out of time. `getStats()` previously reported no counter for either, while
+  `countDiRplTimeout` counts iframe-phone's advisory probe — which fires for every request slower than
+  2s and so is expected to be non-zero on a plugin doing bulk work. `countDiRplFail` now means only
+  what its name says, a request CODAP answered and declined, rather than mixing those with failures.
+  Every counter is documented in the published type declarations.
 
 ### Fixed
 
