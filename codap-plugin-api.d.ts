@@ -125,7 +125,14 @@ declare const codapInterface: {
      * Connection statistics
      */
     stats: {
-        /** How many requests were sent to CODAP. */
+        /**
+         * How many requests the caller issued.
+         *
+         * Counted when `sendRequest` is called, not when the request reaches CODAP, so a request refused
+         * before it could be sent — no connection, or a closed one — is included. That is what makes the
+         * arithmetic on `countDiReqFailed` below hold; counting only the ones that got as far as CODAP
+         * left the refusals incrementing a failure count against a total that had not moved.
+         */
         countDiReq: number;
         /** How many requests CODAP answered with `{success: true}`. */
         countDiRplSuccess: number;
@@ -205,7 +212,14 @@ declare const codapInterface: {
      */
     setRequestTimeout(timeout: number): void;
     getStats(): {
-        /** How many requests were sent to CODAP. */
+        /**
+         * How many requests the caller issued.
+         *
+         * Counted when `sendRequest` is called, not when the request reaches CODAP, so a request refused
+         * before it could be sent — no connection, or a closed one — is included. That is what makes the
+         * arithmetic on `countDiReqFailed` below hold; counting only the ones that got as far as CODAP
+         * left the refusals incrementing a failure count against a total that had not moved.
+         */
         countDiReq: number;
         /** How many requests CODAP answered with `{success: true}`. */
         countDiRplSuccess: number;
