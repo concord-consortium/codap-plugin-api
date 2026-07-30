@@ -311,7 +311,7 @@ describe("codapInterface.sendRequest settles every path through the contract", (
   it("CODAP answers with no value: rejects rather than resolving with undefined", async () => {
     jest.useRealTimers();
     await initInterface();
-    const before = codapInterface.getStats().countDiRplFail;
+    const before = { ...codapInterface.getStats() };
     const callerCallback = jest.fn();
 
     jest.useFakeTimers();
@@ -321,7 +321,9 @@ describe("codapInterface.sendRequest settles every path through the contract", (
 
     await expect(request).rejects.toThrow(/answered with no result/);
     expectSettledOnce(callerCallback, undefined);
-    expect(codapInterface.getStats().countDiRplFail).toBe(before + 1);
+    // a failure, not a decline: countDiRplFail is for a CODAP answer of {success: false}
+    expect(codapInterface.getStats().countDiReqFailed).toBe(before.countDiReqFailed + 1);
+    expect(codapInterface.getStats().countDiRplFail).toBe(before.countDiRplFail);
   });
 
   it("the deadline passes: rejects, and says so in the stats", async () => {
@@ -379,6 +381,41 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback))
       .rejects.toThrow(/closed/);
 
+    expectSettledOnce(callerCallback, undefined);
+  });
+
+  // A message can be structured-cloneable and still not JSON-serializable -- a cycle, or a BigInt --
+  // so it is genuinely sent, and only describing it in a failure message fails. Building that
+  // message unguarded threw while the request was being failed, which left it settled by nothing.
+  it("fails a request whose message cannot be serialized for the error", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const cyclic: any = { action: "create", resource: "dataContext[x].item" };
+    cyclic.values = { self: cyclic };
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest(cyclic, callerCallback);
+    const rejection = expect(request).rejects.toThrow(/exceeded/);
+    jest.advanceTimersByTime(kDefaultTimeout);
+    await rejection;
+
+    expectSettledOnce(callerCallback, undefined);
+  });
+
+  // `.success` read off a null reply would throw inside iframe-phone's message listener, where
+  // nothing settles the request -- so null is as empty an answer as undefined.
+  it("treats a null reply as an answer carrying no result", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const callerCallback = jest.fn();
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
+                                               callerCallback);
+    lastCallback()(null);
+
+    await expect(request).rejects.toThrow(/answered with no result/);
     expectSettledOnce(callerCallback, undefined);
   });
 
@@ -447,6 +484,52 @@ describe("codapInterface.sendRequest settles every path through the contract", (
 // destroy() reports the state it puts the connection in, so getConnectionState() is honest and new
 // requests are refused. That makes init() responsible for clearing it: without the reset, the
 // handshake below would itself be refused and the connection could never be reestablished.
+// A handshake that draws no reply leaves a connection object nothing is listening to. Left in place
+// it looks live, so every later request would be sent and then wait out the full deadline -- a
+// minute per request for a plugin that has already been told it is not running inside CODAP.
+describe("codapInterface.init when the handshake fails", () => {
+  it("refuses later requests instead of letting each wait out the deadline", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    advisoryTimeout(lastCallback());
+    await expect(initPromise).rejects.toThrow(/timed out/);
+
+    expect(fresh.getConnectionState()).toBe("closed");
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
+      .rejects.toThrow(/closed/);
+  });
+
+  it("rejects with an Error, like every other failure", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    advisoryTimeout(lastCallback());
+
+    await expect(initPromise).rejects.toBeInstanceOf(Error);
+  });
+
+  it("reports the failure to init's callback, which otherwise only hears about success", async () => {
+    const fresh = await freshInterface();
+    const initCallback = jest.fn();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any, initCallback);
+    advisoryTimeout(lastCallback());
+    await expect(initPromise).rejects.toThrow(/timed out/);
+
+    expect(initCallback).toHaveBeenCalledTimes(1);
+    expect(initCallback).toHaveBeenCalledWith(undefined);
+  });
+
+  it("can be retried, so a plugin is not stranded by one failed handshake", async () => {
+    const fresh = await freshInterface();
+    const failed = fresh.init({ name: "test", title: "test" } as any);
+    advisoryTimeout(lastCallback());
+    await expect(failed).rejects.toThrow(/timed out/);
+
+    const retry = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await expect(retry).resolves.toBeDefined();
+  });
+});
+
 describe("codapInterface.destroy", () => {
   it("reports the connection as closed", async () => {
     const fresh = await freshInterface();

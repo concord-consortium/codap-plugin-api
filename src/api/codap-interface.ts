@@ -80,9 +80,24 @@ const kMaxRequestTimeout = 2 ** 31 - 1;
 let requestTimeout = kDefaultRequestTimeout;
 
 const stats = {
+  /** How many requests were sent to CODAP. */
   countDiReq: 0,
+  /** How many requests CODAP answered with `{success: true}`. */
   countDiRplSuccess: 0,
+  /**
+   * How many requests CODAP answered with `{success: false}` — that is, answered and declined.
+   * These are outcomes, not failures: the request's promise resolves with the response. For
+   * requests that failed, see `countDiReqFailed`.
+   */
   countDiRplFail: 0,
+  /**
+   * How many requests failed, and so rejected: no connection to send on, no answer within the
+   * deadline, an answer carrying no result, or the send itself throwing.
+   *
+   * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
+   * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.
+   */
+  countDiReqFailed: 0,
   /**
    * How many times iframe-phone's advisory 2s timer has reported that no reply has arrived yet.
    *
@@ -91,7 +106,10 @@ const stats = {
    * wrong. For requests that actually ran out of time, see `countDiReqDeadlineExceeded`.
    */
   countDiRplTimeout: 0,
-  /** How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. */
+  /**
+   * How many requests were rejected for exceeding their deadline. See `setRequestTimeout`. A subset
+   * of `countDiReqFailed`.
+   */
   countDiReqDeadlineExceeded: 0,
   countCodapReq: 0,
   countCodapUnhandledReq: 0,
@@ -142,6 +160,9 @@ let interactiveState = {};
  */
 const notificationSubscribers: { actionSpec: string; resourceSpec: any; operation: any; handler: any; }[] = [];
 
+/** Whether init() has already registered its default interactiveState handler. */
+let interactiveStateHandlerRegistered = false;
+
 function matchResource(resourceName: any, resourceSpec: string) {
   return resourceSpec === "*" || resourceName === resourceSpec;
 }
@@ -152,12 +173,7 @@ function notificationHandler (request: { action: any; resource: any; values: any
   let requestValues = request.values;
   let returnMessage = {success: true};
 
-  // CODAP is talking to us, so the connection is live — unless we have torn it down, in which case
-  // a notification still arriving (destroy() does not unsubscribe from iframe-phone) must not
-  // reopen a connection the caller has closed.
-  if (connection) {
-    connectionState = "active";
-  }
+  markConnectionActive();
   stats.countCodapReq += 1;
   stats.timeCodapLastReq = new Date();
   if (!stats.timeCodapFirstReq) {
@@ -233,11 +249,16 @@ interface IRequestOptions {
   /**
    * Reject as soon as iframe-phone reports no reply, instead of waiting out `requestTimeout`.
    *
-   * Set only for the handshake in `init()`. Everywhere else a request that draws no reply within
-   * iframe-phone's advisory 2s is assumed to be in flight and still coming; during the handshake
-   * there is no such assumption to make, so silence means nothing is listening. This is a property
-   * of the individual request rather than of the connection state, so an ordinary request issued
-   * while the handshake is outstanding is still treated as an ordinary request.
+   * Set only for the handshake in `init()`, and a deliberate trade rather than a safe inference.
+   * Silence at 2s does not prove nothing is listening: iframe-phone buffers into `postMessageQueue`
+   * until the parent answers its repeated "hello", while the 2s probe is armed when `call` is
+   * invoked — so a parent slow to complete that exchange looks the same as no parent at all. We
+   * accept that, because the alternative is a plugin loaded outside CODAP hanging for the full
+   * request timeout before it can say so, and because a plugin that does load in CODAP can retry.
+   *
+   * This is a property of the individual request rather than of the connection state, so an
+   * ordinary request issued while the handshake is outstanding is still treated as an ordinary
+   * request.
    */
   failFastWithoutReply?: boolean
 }
@@ -255,6 +276,34 @@ interface IRequestOptions {
  */
 function reportCallbackError (error: unknown) {
   queueMicrotask(() => { throw error; });
+}
+
+/**
+ * Renders a request for inclusion in an error message.
+ *
+ * `JSON.stringify` throws on a cyclic value and on a BigInt, both of which `postMessage` accepts —
+ * so a request carrying either is genuinely sent, and the only thing that fails is describing it.
+ * Building a failure message from `JSON.stringify` unguarded would therefore throw while a request
+ * was being failed, leaving it settled by nothing at all.
+ */
+function describeMessage (message: unknown) {
+  try {
+    return JSON.stringify(message) ?? String(message);
+  } catch {
+    return "[message could not be serialized]";
+  }
+}
+
+/**
+ * Records that CODAP is talking to us — unless the caller has torn the connection down, in which
+ * case traffic still arriving must not reopen a connection they closed. `destroy()` does not
+ * unsubscribe from iframe-phone, and a reply to a request that was already in flight can arrive
+ * after it, so both this module's inbound paths have to check.
+ */
+function markConnectionActive () {
+  if (connection) {
+    connectionState = "active";
+  }
 }
 
 /**
@@ -305,8 +354,12 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
      * stack, and so every rejection from this module has one shape to handle. Takes `unknown` so
      * that a caught exception can be passed straight through without each call site repeating the
      * same normalization.
+     *
+     * Every failure goes through here, which is what lets `countDiReqFailed` account for all of
+     * them without each path remembering to count itself.
      */
     function settleFailure (reason: unknown) {
+      if (!isSettled) { stats.countDiReqFailed++; }
       settle(reject, reason instanceof Error ? reason : new Error(String(reason)));
     }
 
@@ -318,33 +371,35 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
      *    CODAP arrives as `undefined` with this argument absent, which is a real answer and settles
      *    the request at once. See `connection`'s type for why this argument has to be declared.
      */
-    function handleResponse (response: IResult | undefined, noReplyYet?: Error) {
+    function handleResponse (response: IResult | undefined | null, noReplyYet?: Error) {
       // A reply can still arrive after the deadline rejected the request. Returning early keeps it
       // from marking the connection active or counting a success against a request the caller has
       // already been told failed.
       if (isSettled) { return; }
 
-      if (response === undefined) {
+      // `null` is grouped with `undefined` deliberately: it is just as empty an answer, and reading
+      // `.success` off it would throw here, inside iframe-phone's message listener, where nothing
+      // would settle the request.
+      if (response === undefined || response === null) {
         if (noReplyYet) {
           // Nothing has answered within iframe-phone's advisory 2s. The request is still in flight,
           // so this is not an outcome — except during the handshake, where silence is the answer.
           stats.countDiRplTimeout++;
           if (failFastWithoutReply) {
-            settleFailure("handleResponse: CODAP request timed out: " + JSON.stringify(message));
+            settleFailure("handleResponse: CODAP request timed out: " + describeMessage(message));
           }
           return;
         }
         // CODAP answered, with no value. That is a real answer and settles the request, but there
         // is no result for the caller to read, so it fails rather than resolving with `undefined`
         // and handing the caller something `result.success` throws on.
-        connectionState = "active";
-        stats.countDiRplFail++;
-        settleFailure("handleResponse: CODAP answered with no result: " + JSON.stringify(message));
+        markConnectionActive();
+        settleFailure("handleResponse: CODAP answered with no result: " + describeMessage(message));
         return;
       }
-      connectionState = "active";
+      markConnectionActive();
       // TODO: a batched request is answered with an array, which has no top-level `success`, so
-      // every successful init() handshake is counted a failure here. These counters are diagnostic
+      // every successful init() handshake is counted a decline here. These counters are diagnostic
       // only, but they mislead whoever reads getStats() to find out why a plugin is misbehaving.
       if (response.success) { stats.countDiRplSuccess++; } else { stats.countDiRplFail++; }
       settleSuccess(response);
@@ -353,7 +408,7 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
     switch (connectionState) {
       case "closed": // log the message and ignore
         // console.warn('sendRequest on closed CODAP connection: ' + JSON.stringify(message));
-        settleFailure("sendRequest on closed CODAP connection: " + JSON.stringify(message));
+        settleFailure("sendRequest on closed CODAP connection: " + describeMessage(message));
         break;
       case "preinit": // warn, but issue request.
         // console.log('sendRequest on not yet initialized CODAP connection: ' +
@@ -393,12 +448,12 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
           timeoutTimer = setTimeout(function () {
             stats.countDiReqDeadlineExceeded++;
             settleFailure("sendRequest: CODAP request exceeded " + timeout + "ms: " +
-                JSON.stringify(message));
+                describeMessage(message));
           }, timeout);
         } else {
           // Nothing will ever call back, so settle now rather than leaving the caller waiting
           // forever — the same guarantee the deadline provides once a request is in flight.
-          settleFailure("sendRequest on non-existent CODAP connection: " + JSON.stringify(message));
+          settleFailure("sendRequest on non-existent CODAP connection: " + describeMessage(message));
         }
     }
   });
@@ -426,7 +481,28 @@ export const codapInterface = {
   init (iConfig: IConfig, iCallback?: (arg0: any) => void) {
     const this_ = this;
     return new Promise(function (resolve: (arg0: any) => void, reject: { (arg0: string): void; (arg0: any): void; }) {
+      /**
+       * Fails the handshake, and with it the connection.
+       *
+       * A handshake that got no answer leaves a `connection` object that nothing is listening to.
+       * Left in place it looks live to `issueRequest`, so every later request would be sent and then
+       * wait out the full deadline — a minute per request for a plugin that has already been told it
+       * is not running inside CODAP. Tearing it down means those requests are refused at once,
+       * which is what `init()` rejecting is supposed to have told the caller.
+       */
+      function failHandshake(reason: unknown) {
+        connection = null;
+        connectionState = "closed";
+        reject(reason instanceof Error ? reason : new Error(String(reason)));
+        // the callback reports every outcome, as sendRequest's does; there is no state to pass on
+        if (iCallback) {
+          iCallback(undefined);
+        }
+      }
+
       function getFrameRespHandler(resp: { values: { error: any; savedState: any }; success: boolean }[]) {
+        // `resp` is always defined here: a handshake that drew no reply rejects rather than
+        // resolving, so it reaches failHandshake instead of this function.
         const success = resp && resp[1] && resp[1].success;
         const receivedFrame = success && resp[1].values;
         const savedState = receivedFrame && receivedFrame.savedState;
@@ -437,17 +513,11 @@ export const codapInterface = {
             iConfig.stateHandler(savedState);
           }
           resolve(savedState);
-        } else {
-          if (!resp) {
-            reject("Connection request to CODAP timed out.");
-          } else {
-            reject(
-                (resp[1] && resp[1].values && resp[1].values.error) ||
-                "unknown failure");
+          if (iCallback) {
+            iCallback(savedState);
           }
-        }
-        if (iCallback) {
-          iCallback(savedState);
+        } else {
+          failHandshake((resp[1] && resp[1].values && resp[1].values.error) || "unknown failure");
         }
       }
 
@@ -476,16 +546,19 @@ export const codapInterface = {
       // connection could never be reestablished.
       connectionState = "preinit";
 
-      if (!config.customInteractiveStateHandler) {
+      // guard against re-registering on a second init(), which would leave a duplicate subscriber
+      // behind for every reconnect
+      if (!config.customInteractiveStateHandler && !interactiveStateHandlerRegistered) {
         this_.on("get", "interactiveState", function () {
           return ({success: true, values: this_.getInteractiveState()});
         }.bind(this_));
+        interactiveStateHandlerRegistered = true;
       }
 
       // console.log('sending interactiveState: ' + JSON.stringify(this_.getInteractiveState));
       // update, then get the interactiveFrame.
       return issueRequest([updateFrameReq, getFrameReq], { failFastWithoutReply: true })
-        .then(getFrameRespHandler as any, reject);
+        .then(getFrameRespHandler as any, failHandshake);
     }.bind(this));
   },
 
@@ -554,11 +627,21 @@ export const codapInterface = {
    * `init()` can be called again to reconnect.
    */
   destroy () {
-    // TODO: settle the requests still in flight. Each of them waits out its full deadline instead —
-    // a minute in which the caller holds its payload alive after the plugin is gone, ending in a
-    // rejection that can surface against a re-initialized instance. They used to fail within
-    // iframe-phone's ~2s by accident. Settling them needs a registry of in-flight requests, since
-    // `isSettled` and `timeoutTimer` are locals inside each issueRequest executor.
+    // TODO: tear down properly. Two things are missing, and both need machinery this does not have.
+    //
+    // Settle the requests still in flight: each waits out its full deadline instead — a minute in
+    // which the caller holds its payload alive after the plugin is gone, ending in a rejection that
+    // can surface against a re-initialized instance. They used to fail within iframe-phone's ~2s by
+    // accident. Doing it needs a registry of in-flight requests, since `isSettled` and
+    // `timeoutTimer` are locals inside each issueRequest executor.
+    //
+    // Unsubscribe from iframe-phone, whose endpoint exposes `disconnect()`: dropping the reference
+    // leaves its window message listener installed, so CODAP's notifications still reach
+    // notificationHandler after teardown (which is why the inbound paths check `connection` before
+    // reporting the connection live) and a reply to a request still in flight is delivered to a
+    // callback for a request nobody is waiting on. Calling it needs coverage of what iframe-phone's
+    // module-level endpoint singleton does across a disconnect/reconnect, which these unit tests
+    // cannot provide against a mocked endpoint.
     connection = null;
     // Report the state the caller put us in, so getConnectionState() is honest after teardown and
     // new requests are refused rather than reaching a null connection. init() resets this.

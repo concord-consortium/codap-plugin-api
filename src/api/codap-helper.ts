@@ -195,9 +195,10 @@ export const createNewCollection = (dataContextName: string, collectionName: str
 
 export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number): Promise<string | undefined> => {
   index = index || 0;
-  // guard against runaway loops. Checked before the lookup rather than after, so giving up costs no
-  // request: each one can take up to the full request timeout, and this recurses once per attempt.
-  if (index >= 100) {
+  // guard against runaway loops. `> 100` rather than `>= 100` so that the hundredth suffix is still
+  // tried: the candidates are `collectionName` through `collectionName100`, and stopping at 99 would
+  // report no name available while one still was.
+  if (index > 100) {
     return undefined;
   }
   const uniqueName = `${collectionName}${index !== 0 ? index : ""}`;
@@ -254,16 +255,21 @@ export const updateAttributePosition = (dataContextName: string, collectionName:
 
 // Reorganizes the attribute into its own collection. Each step depends on the answer to the one
 // before it, so this follows the promise-form guidance above: it awaits every request and resolves
-// with the result of the last step it got to. A request that goes unanswered rejects; a step CODAP
-// explicitly refuses resolves with that refusal, so the caller always learns whether the attribute
-// ended up where it asked for.
+// with the result of the last step it reached — the attribute move when every step ran, or the step
+// CODAP refused. A request that goes unanswered rejects.
+//
+// Note what the resolved result does and does not tell the caller: that the steps this function
+// issued succeeded. It does not report what CODAP did in response, in particular whether the old
+// collection was removed once its last attribute left.
 export const createCollectionFromAttribute = async (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string): Promise<IResult> => {
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
   const existingCollection = await codapInterface.sendRequest(getCollectionMessage) as unknown as IResult;
 
-  // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
-  // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
+  // Since you can't "re-parent" collections, the attribute gets a new collection of its own and is
+  // moved into it. When the attribute is the only one left in its old collection, or is the one the
+  // collection is named for, that new collection takes a name derived from the attribute's — and
+  // CODAP removes the old collection once it is empty.
   // (a successful lookup for a collection with no attribute list leaves `attrs` undefined, hence `?.`)
   const moveCollection = existingCollection.success &&
     (existingCollection.values?.attrs?.length === 1 || attr.name === oldCollectionName);

@@ -80,6 +80,29 @@ describe("createCollectionFromAttribute", () => {
       .resolves.toEqual({ success: true });
   });
 
+  // The candidate range is part of the behaviour, not an implementation detail: an off-by-one in the
+  // runaway-loop guard makes the helper report no name available while one still is. The suffix
+  // range is `Height` (no suffix) through `Height100`, so the last candidate has to be tried.
+  it("tries every candidate name through the hundredth suffix", async () => {
+    let asked = 0;
+    mockSendRequest.mockImplementation((message: any) => {
+      if (message.action !== "get") { return Promise.resolve({ success: true }); }
+      asked++;
+      // every name is taken except the last candidate
+      const taken = message.resource !== "dataContext[ctx].collection[Height100]";
+      return Promise.resolve({ success: taken });
+    });
+
+    // attr.name === oldCollectionName takes the branch that searches for a unique name
+    const result = await createCollectionFromAttribute("ctx", "Height", attr, "root");
+
+    expect(result.success).toBe(true);
+    // 1 existence check for the attribute's own collection, then Height, Height1 ... Height100
+    expect(asked).toBe(1 + 101);
+    expect(requests().find(r => r.action === "create")?.values)
+      .toEqual({ name: "Height100", title: "Height100", parent: "_root_" });
+  });
+
   // The lookups ensureUniqueCollectionName issues all report the name taken, so it runs out of
   // candidates. Nothing was refused by CODAP, but the caller still needs a failure it can read.
   it("reports a failure when no unused collection name is available", async () => {
