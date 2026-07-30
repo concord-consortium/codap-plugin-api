@@ -34,6 +34,7 @@
   },
   "scripts": {
     "build": "run-s build:tsc build:rollup",
+    "prepublishOnly": "run-s build test lint",
     "prebuild:tsc": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
     "build:tsc": "tsc",
     "build:rollup": "rollup --config",
@@ -79,8 +80,5 @@
   },
   "dependencies": {
     "iframe-phone": "^1.3.1"
-  },
-  "directories": {
-    "doc": "doc"
   }
 }
