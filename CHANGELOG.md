@@ -30,7 +30,8 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   single-result callback with an array message, or the reverse, does not compile. A callback can
   therefore never be handed a response it cannot read: previously `sendRequest([a, b], cb)` compiled
   and gave `cb` an array, where reading `result.success` yielded `undefined` and a successful batch
-  looked like a failed one. Anything
+  looked like a failed one.
+- **A failed request rejects with an `Error`**, where it previously rejected with a string. Anything
   matching on the rejection value (`error.startsWith(...)`, `error === "..."`) needs updating, and
   `error.message` is where the text now lives — note that `String(error)` prefixes it with `Error: `.
   Some of the text changed too: a request that outlives its deadline now reports
@@ -66,7 +67,6 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   already-settled promise: an `await` with no `try`/`catch` that could not throw now can. Its
   declared return type narrows from `Promise<unknown>` to `Promise<IResult>`, which is
   source-compatible for anyone casting the result.
-
 - **A failed `init()` handshake now closes the connection**, and its optional callback is invoked
   with `undefined` rather than being skipped. Previously a handshake that drew no reply left a
   connection object behind that nothing was listening to, so every subsequent request was sent and
