@@ -1,4 +1,4 @@
-export {IConfig, ClientNotification, ClientHandler, RequestCallback, codapInterface} from "./api/codap-interface";
+export {IConfig, ClientNotification, ClientHandler, RequestCallback, BatchRequestCallback, codapInterface} from "./api/codap-interface";
 
 export {
   IDimensions,

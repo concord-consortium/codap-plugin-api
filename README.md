@@ -63,8 +63,17 @@ codapInterface.sendRequest(message, (result?: IResult) => {
 });
 ```
 
-A batched request — an array of requests — is answered with an array of results, which does not fit
-that type. Batch through the returned promise rather than a callback.
+CODAP answers a batched request — an array of requests — with an array of results, so its callback
+takes that array instead, as `BatchRequestCallback`. Which shape is required follows from the message:
+passing an array requires the array form, and passing a single request rejects it. A callback can
+therefore never be paired with a response it is unable to read.
+
+```ts
+codapInterface.sendRequest([firstRequest, secondRequest], (results?: IResult[]) => {
+  if (!results) { return; }       // the request failed; the promise rejects with the reason
+  results.forEach(result => { /* ... */ });
+});
+```
 
 `sendRequest` returns a promise whether or not a callback is passed, and that promise rejects with
 an `Error` on the same failures the callback reports as `undefined`: the request exceeded its

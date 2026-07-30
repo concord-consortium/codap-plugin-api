@@ -112,11 +112,14 @@ type ClientHandler = (notification: ClientNotification) => void;
  * satisfy it, and will not compile — which is the intent, because such a callback throws a
  * `TypeError` the first time a request fails, on a path a plugin may not exercise until it is in
  * front of users.
- *
- * A batched request — an array of requests — is answered with an array of results. That does not fit
- * here, so batch through the returned promise rather than a callback.
  */
 type RequestCallback = (response?: IResult, request?: any) => void;
+/**
+ * As `RequestCallback`, for a batched request: CODAP answers an array of requests with an array of
+ * results. `sendRequest` requires this shape when the message is an array and rejects it otherwise,
+ * so a callback cannot be paired with a response it is unable to read.
+ */
+type BatchRequestCallback = (response?: IResult[], request?: any) => void;
 declare const codapInterface: {
     /**
      * Connection statistics
@@ -288,7 +291,7 @@ declare const codapInterface: {
      *
      * @return {Promise} The promise of the response from CODAP.
      */
-    sendRequest(message: any, callback?: RequestCallback): Promise<unknown>;
+    sendRequest<TMessage>(message: TMessage, callback?: (TMessage extends readonly any[] ? BatchRequestCallback : RequestCallback) | undefined): Promise<unknown>;
     /**
      * Registers a handler to respond to CODAP-initiated requests and
      * notifications. See {@link https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-API#codap-initiated-actions}
@@ -312,4 +315,4 @@ declare const codapInterface: {
     parseResourceSelector(iResource: string): any;
 };
 
-export { type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, type RequestCallback, addCasesToSelection, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, getSelectionList, initializePlugin, selectCases, selectSelf, sendMessage, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };
+export { type BatchRequestCallback, type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, type RequestCallback, addCasesToSelection, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, getSelectionList, initializePlugin, selectCases, selectSelf, sendMessage, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };

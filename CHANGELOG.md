@@ -23,7 +23,14 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   names every callback that no longer matches the expected signature, at the moment of upgrading,
   instead of leaving each one to throw on a failure path that may be rare in testing and common in
   use. A callback that already handled absence needs nothing; one that did not needs its parameter
-  widened to `(result?: IResult)`. Anything
+  widened to `(result?: IResult)`.
+
+  The required shape follows from the message. CODAP answers a batched request — an array of requests
+  — with an array of results, so that case takes `BatchRequestCallback` (also exported) and passing a
+  single-result callback with an array message, or the reverse, does not compile. A callback can
+  therefore never be handed a response it cannot read: previously `sendRequest([a, b], cb)` compiled
+  and gave `cb` an array, where reading `result.success` yielded `undefined` and a successful batch
+  looked like a failed one. Anything
   matching on the rejection value (`error.startsWith(...)`, `error === "..."`) needs updating, and
   `error.message` is where the text now lives — note that `String(error)` prefixes it with `Error: `.
   Some of the text changed too: a request that outlives its deadline now reports

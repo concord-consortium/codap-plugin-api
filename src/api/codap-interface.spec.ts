@@ -98,6 +98,37 @@ describe("the callback type", () => {
     // `undefined` it refuses to admit is precisely the TypeError the type exists to prevent
     expect([cannotFail, canFail].every(fn => typeof fn === "function")).toBe(true);
   });
+
+  // CODAP answers a batched request with one result per request, so a callback written for a single
+  // result would read `.success` off an array and get `undefined` -- a silent wrong answer, on the
+  // one path where the contract could still mislead. The message type decides which callback shape
+  // is accepted, so neither pairing can be got wrong.
+  //
+  // Declared, never called: these are compile-time assertions, and running them would issue real
+  // requests. If the pairing ever stops being enforced, the @ts-expect-error directives below stop
+  // being errors and this file fails to compile.
+  it("pairs the callback shape with the message shape", () => {
+    const single = (result?: IResult) => result?.success;
+    const batch = (results?: IResult[]) => results?.length;
+    const message = { action: "get", resource: "dataContext[x]" };
+    const batched = [message, message];
+    const untyped: any = message;
+
+    function compileOnly() {
+      codapInterface.sendRequest(message, single);
+      codapInterface.sendRequest(batched, batch);
+      // an `any` message cannot be discriminated, so both shapes stay available rather than
+      // arbitrarily rejecting one
+      codapInterface.sendRequest(untyped, single);
+      codapInterface.sendRequest(untyped, batch);
+      // @ts-expect-error a batched request answers with an array, which this callback cannot read
+      codapInterface.sendRequest(batched, single);
+      // @ts-expect-error a single request answers with one result, not an array
+      codapInterface.sendRequest(message, batch);
+    }
+
+    expect(typeof compileOnly).toBe("function");
+  });
 });
 
 describe("codapInterface.sendRequest", () => {

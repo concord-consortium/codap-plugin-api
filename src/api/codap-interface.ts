@@ -159,14 +159,24 @@ export type ClientHandler = (notification: ClientNotification) => void;
  * satisfy it, and will not compile — which is the intent, because such a callback throws a
  * `TypeError` the first time a request fails, on a path a plugin may not exercise until it is in
  * front of users.
- *
- * A batched request — an array of requests — is answered with an array of results. That does not fit
- * here, so batch through the returned promise rather than a callback.
  */
 export type RequestCallback = (response?: IResult, request?: any) => void;
 
+/**
+ * As `RequestCallback`, for a batched request: CODAP answers an array of requests with an array of
+ * results. `sendRequest` requires this shape when the message is an array and rejects it otherwise,
+ * so a callback cannot be paired with a response it is unable to read.
+ */
+export type BatchRequestCallback = (response?: IResult[], request?: any) => void;
+
 /** What CODAP answers with: one result, or one per request when a batch was sent. */
 type CodapResponse = IResult | IResult[];
+
+/**
+ * Either callback shape. `sendRequest` decides which one a caller may pass from the shape of their
+ * message, so the request path itself holds both and does not care which it has.
+ */
+type EitherRequestCallback = RequestCallback | BatchRequestCallback;
 
 let interactiveState = {};
 
@@ -255,7 +265,7 @@ interface IRequestOptions {
    * JSDoc carries this contract for consumers — this interface is module-private and never reaches
    * the published type declarations.
    */
-  callback?: RequestCallback
+  callback?: EitherRequestCallback
   /**
    * Reject as soon as iframe-phone reports no reply, instead of waiting out `requestTimeout`.
    *
@@ -365,13 +375,18 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
         // see reportCallbackError.
         try {
           // An async callback reports a throw as a rejected return value, which the catch can't see.
-          // `RequestCallback` returns `void`, but TypeScript lets a callback in that position return
+          // The callback types return `void`, but TypeScript lets a callback in that position return
           // a value anyway, so an async one arrives here as a promise and has to be observed.
-          // A batched request's callback receives the array, which `RequestCallback` does not
-          // describe — see its doc: batch through the promise. The cast keeps that documented
-          // narrowing here rather than pushing an array every consumer must handle into the type.
-          const callbackResult = callback(callbackResponse as IResult | undefined,
-                                          message) as unknown;
+          //
+          // The response is handed over unnarrowed: `sendRequest` pairs the callback's shape with the
+          // message's, so a batched request's callback is the one that takes an array and a single
+          // request's is the one that takes a result. This code does not need to know which it has.
+          // Calling the union directly would demand an argument satisfying both signatures at once,
+          // which only `undefined` does. Narrowing it to one accepting either response says what is
+          // actually true: `sendRequest` admits only the callback that matches its message's shape,
+          // so whichever is here can read whatever CODAP sent for it.
+          const notify = callback as (response?: CodapResponse, request?: any) => void;
+          const callbackResult = notify(callbackResponse, message) as unknown;
           if (callbackResult && typeof (callbackResult as PromiseLike<unknown>).then === "function") {
             (callbackResult as PromiseLike<unknown>).then(undefined, reportCallbackError);
           }
@@ -712,7 +727,9 @@ export const codapInterface = {
    *
    * @return {Promise} The promise of the response from CODAP.
    */
-  sendRequest (message: any, callback?: RequestCallback) {
+  sendRequest <TMessage>(message: TMessage,
+                         callback?: TMessage extends readonly any[] ? BatchRequestCallback
+                                                                    : RequestCallback) {
     return issueRequest(message, { callback });
   },
 
