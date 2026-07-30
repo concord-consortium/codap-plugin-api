@@ -67,12 +67,22 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   already-settled promise: an `await` with no `try`/`catch` that could not throw now can. Its
   declared return type narrows from `Promise<unknown>` to `Promise<IResult>`, which is
   source-compatible for anyone casting the result.
-- **A failed `init()` handshake now closes the connection**, and its optional callback is invoked
-  with `undefined` rather than being skipped. Previously a handshake that drew no reply left a
-  connection object behind that nothing was listening to, so every subsequent request was sent and
-  then waited out the full deadline — a minute apiece for a plugin that had already been told it was
-  not running inside CODAP. Those requests are now refused at once. `init()` can be called again to
-  retry, and it rejects with an `Error` like every other failure.
+- **`ensureUniqueCollectionName` checks its attempt limit before issuing a lookup rather than after.**
+  Callers using the documented entry point, `index = 0`, are unaffected: the candidates are still
+  `collectionName` through `collectionName100` and the request count is unchanged. A caller passing an
+  `index` above 100 directly now gets `undefined` without a request being issued, where it previously
+  issued the lookup and returned the name if it was free.
+- **A handshake that nothing answers now closes the connection**, and `init()`'s optional callback is
+  invoked with `undefined` rather than being skipped. Such a handshake used to leave an endpoint
+  behind that nothing was listening to, so every subsequent request was sent and then waited out the
+  full deadline — a minute apiece for a plugin already told it was not running inside CODAP. Those
+  requests are now refused at once. `init()` can be called again to retry, and it rejects with an
+  `Error` like every other failure.
+
+  Only silence closes the connection. A handshake CODAP *answers* and declines leaves it open, since
+  CODAP is evidently there and listening; only the handshake fails. And a handshake closes only the
+  endpoint it created, so of two overlapping `init()` calls — which React's StrictMode produces from
+  a single effect — the one that fails cannot close the connection the other established.
 
 ### Changed
 

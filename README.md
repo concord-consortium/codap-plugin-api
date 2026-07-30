@@ -48,9 +48,13 @@ codapInterface.setRequestTimeout(120000);  // allow longer for very large reques
 `setRequestTimeout` applies to requests issued after the call; requests already in flight keep the
 value they were given. A non-finite or non-positive value falls back to the default.
 
-`sendRequest` accepts an optional callback in addition to returning a promise. The callback
-receives CODAP's response, or `undefined` when the request failed — note that this is distinct from
-a response of `{ success: false }`, which means CODAP answered and declined.
+`sendRequest` accepts an optional callback in addition to returning a promise. The callback receives
+CODAP's response, or `undefined` when the request failed — note that this is distinct from a response
+of `{ success: false }`, which means CODAP answered and declined.
+
+It is invoked exactly once, synchronously as the promise settles. That is *before* any `.then` or
+`await` continuation on the same request, since those are microtasks: if you use both, the callback
+runs first.
 
 In TypeScript the callback's parameter has to admit that absence. The exported `RequestCallback` type
 is `(response?: IResult, request?: any) => void`, so a callback declared to take `IResult` alone does

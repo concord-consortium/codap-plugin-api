@@ -58,7 +58,7 @@ function advisoryTimeout(callback: PhoneCallback) {
   callback(undefined, new Error("IframePhone timed out waiting for reply"));
 }
 
-/** Resolves after pending microtasks flush, so promise settlement can be observed. */
+/** Yields to the task queue, so anything already queued -- microtasks included -- has run. */
 function flush() {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
@@ -148,30 +148,6 @@ describe("codapInterface.sendRequest", () => {
     await expect(request).resolves.toEqual({ success: true, values: { itemIDs: ["a", "b"] } });
   });
 
-  it("does not invoke the caller's callback with undefined on the advisory timeout", async () => {
-    const callerCallback = jest.fn();
-    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" }, callerCallback);
-    const callback = lastCallback();
-
-    advisoryTimeout(callback);
-    await flush();
-    expect(callerCallback).not.toHaveBeenCalled();
-
-    callback({ success: true });
-    await request;
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-    expect(callerCallback).toHaveBeenCalledWith({ success: true }, expect.anything());
-  });
-
-  it("still resolves only once when the real reply arrives twice", async () => {
-    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
-    const callback = lastCallback();
-
-    callback({ success: true, values: 1 });
-    callback({ success: true, values: 2 });
-
-    await expect(request).resolves.toEqual({ success: true, values: 1 });
-  });
 });
 
 describe("codapInterface.sendRequest hard timeout", () => {
@@ -184,18 +160,6 @@ describe("codapInterface.sendRequest hard timeout", () => {
     jest.useRealTimers();
     codapInterface.setRequestTimeout(kDefaultTimeout);
   });
-
-  it("rejects if no real reply ever arrives, so a dead CODAP cannot hang the caller forever",
-    async () => {
-      jest.useFakeTimers();
-      const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
-      const rejection = expect(request).rejects.toThrow(/exceeded/);
-
-      advisoryTimeout(lastCallback());        // advisory timeout — must not settle
-      jest.advanceTimersByTime(kDefaultTimeout);   // hard deadline elapses
-
-      await rejection;
-    });
 
   it("uses a configurable hard timeout", async () => {
     codapInterface.setRequestTimeout(5000);
@@ -238,41 +202,6 @@ describe("codapInterface.sendRequest hard timeout", () => {
       await rejection;
     });
 
-  // `connection.call` can throw synchronously -- an uncloneable value in the message makes
-  // postMessage raise DataCloneError. Left to escape the executor it would reject the promise
-  // without passing through settle(), which is the one path on which the callback contract could
-  // still be false: the caller would get a rejection and no notification. It is also why the
-  // deadline is armed after the call rather than before -- armed first, the timer would outlive the
-  // throw and report a failure a minute after the caller had handled it.
-  it("settles through the contract when the request throws synchronously", async () => {
-    const callerCallback = jest.fn();
-    mockCall.mockImplementationOnce(() => {
-      throw new DOMException("value could not be cloned", "DataCloneError");
-    });
-
-    jest.useFakeTimers();
-    await expect(codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" },
-                                            callerCallback)).rejects.toThrow(/cloned/);
-
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-    expect(callerCallback).toHaveBeenCalledWith(undefined, expect.anything());
-
-    // no deadline was armed, so nothing can fire later against a request that has already settled
-    expect(jest.getTimerCount()).toBe(0);
-    jest.advanceTimersByTime(kDefaultTimeout);
-    expect(callerCallback).toHaveBeenCalledTimes(1);
-  });
-
-  it("clears the deadline once the request has resolved", async () => {
-    jest.useFakeTimers();
-    const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" });
-
-    lastCallback()({ success: true });
-    await expect(request).resolves.toEqual({ success: true });
-
-    // the settle-once contract has to cancel the timer, not merely ignore it when it fires
-    expect(jest.getTimerCount()).toBe(0);
-  });
 });
 
 // Two failed review rounds turned on the same question -- is the contract true on *every* path? --
@@ -455,8 +384,12 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     expect(settled).toBe(false);
     expect(callerCallback).not.toHaveBeenCalled();
 
-    lastCallback()({ success: true });     // settle it so no deadline outlives the test
-    await request;
+    // and the reply that follows the probe settles it normally, which is the whole point of
+    // ignoring the probe: the request was in flight, not failed
+    jest.useFakeTimers();
+    lastCallback()({ success: true, values: { itemIDs: ["a"] } });
+    await expect(request).resolves.toEqual({ success: true, values: { itemIDs: ["a"] } });
+    expectSettledOnce(callerCallback, { success: true, values: { itemIDs: ["a"] } });
   });
 
   // iframe-phone clears its pending callback as soon as it invokes it, so it will not deliver the
@@ -508,6 +441,42 @@ describe("codapInterface.sendRequest settles every path through the contract", (
 // contract, so it needs its own coverage of the same questions: does it always settle, does it
 // report failure, and does it leave the plugin able to proceed either way.
 describe("codapInterface.init", () => {
+  // Closing the connection is right when nothing answered, and wrong whenever CODAP did. A decline
+  // is CODAP answering: it is there and listening, so the connection stays usable and only the
+  // handshake fails.
+  it("leaves the connection usable when CODAP declines the handshake", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: false, values: { error: "no frame" } }]);
+
+    await expect(initPromise).rejects.toThrow(/no frame/);
+    expect(fresh.getConnectionState()).not.toBe("closed");
+
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
+  // React's StrictMode double-invokes effects, and the README initializes from one, so two
+  // handshakes can be outstanding at once. The loser must not close the winner's connection: an
+  // init() that resolved and then handed back a dead connection reports nothing at all.
+  it("does not let one handshake close the connection another established", async () => {
+    const fresh = await freshInterface();
+    const first = fresh.init({ name: "test", title: "test" } as any);
+    const second = fresh.init({ name: "test", title: "test" } as any);
+
+    callbackAt(1)([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await expect(second).resolves.toBeDefined();
+
+    advisoryTimeout(callbackAt(0));                       // the first handshake gives up
+    await expect(first).rejects.toThrow(/timed out/);
+
+    expect(fresh.getConnectionState()).toBe("active");
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
   it("refuses later requests instead of letting each wait out the deadline", async () => {
     const fresh = await freshInterface();
     const initPromise = fresh.init({ name: "test", title: "test" } as any);
@@ -553,6 +522,26 @@ describe("codapInterface.init", () => {
     lastCallback()([{ success: true }, { success: true, values: { savedState: { a: 1 } } }]);
 
     await expect(initPromise).resolves.toEqual({ a: 1 });
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toThrow(boom);
+    spy.mockRestore();
+  });
+
+  // The saved state comes out of a CODAP document, and merging it is the first thing init() does
+  // with it. A throwing getter there used to leave init() pending forever, for the same reason a
+  // throwing stateHandler did: the exception went into a promise chain nothing observes.
+  it("settles even when merging the saved state throws", async () => {
+    const fresh = await freshInterface();
+    const scheduled: Array<() => void> = [];
+    const spy = jest.spyOn(window, "queueMicrotask")
+                    .mockImplementation((thunk: () => void) => { scheduled.push(thunk); });
+    const boom = new Error("unreadable saved state");
+    const savedState = { get poisoned() { throw boom; } };
+
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState } }]);
+
+    await expect(initPromise).resolves.toBe(savedState);
     expect(scheduled).toHaveLength(1);
     expect(scheduled[0]).toThrow(boom);
     spy.mockRestore();
@@ -622,7 +611,7 @@ describe("codapInterface.destroy", () => {
 
 // A throw from the caller's callback is a consumer bug, not a failure of the request -- which has
 // already settled by then. It must not escape into the stack that invoked the callback (iframe-
-// phone's listener, the deadline timer, this executor), so it is rethrown on a fresh task, where it
+// phone's listener, the deadline timer, this executor), so it is rethrown from a microtask, where it
 // stays an uncaught error that window.onerror and error reporters can see. These tests capture what
 // is scheduled rather than letting it throw, which would fail the suite it is meant to be reported
 // through.
@@ -762,17 +751,19 @@ describe("codapInterface stats", () => {
     lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
     await initPromise;
 
-    const before = fresh.getStats().countDiRplTimeout;
+    const before = { ...fresh.getStats() };
     const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
     const callback = lastCallback();
 
     advisoryTimeout(callback);
     await flush();
-    expect(fresh.getStats().countDiRplTimeout).toBe(before + 1);
+    expect(fresh.getStats().countDiRplTimeout).toBe(before.countDiRplTimeout + 1);
 
     callback({ success: true });
     await expect(request).resolves.toEqual({ success: true });
-    expect(fresh.getStats().countDiRplSuccess).toBeGreaterThan(0);
+    // captured rather than `toBeGreaterThan(0)`, which the init() handshake satisfies on its own and
+    // which therefore said nothing about the request under test
+    expect(fresh.getStats().countDiRplSuccess).toBe(before.countDiRplSuccess + 1);
   });
 
   // A batched request is answered with an array, which has no top-level `success` to read, so every
@@ -797,6 +788,41 @@ describe("codapInterface stats", () => {
 
     expect(fresh.getStats().countDiRplSuccess).toBe(0);
     expect(fresh.getStats().countDiRplFail).toBe(1);
+  });
+
+  // The counters document an arithmetic relationship, which nothing asserted, which is how it came
+  // to be false: a request refused before it could be sent incremented only the failure counter, so
+  // the "still in flight" figure went negative.
+  it("counts a refused request, so the in-flight arithmetic holds", async () => {
+    const fresh = await freshInterface();
+
+    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
+      .rejects.toThrow(/non-existent/);
+
+    const s = fresh.getStats();
+    expect(s.countDiReq).toBe(1);
+    expect(s.countDiReqFailed).toBe(1);
+    expect(s.countDiReq - s.countDiRplSuccess - s.countDiRplFail - s.countDiReqFailed).toBe(0);
+  });
+
+  it("keeps the in-flight arithmetic true across a mix of outcomes", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await initPromise;
+
+    const declined = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: false });
+    await declined;
+
+    const inFlight = fresh.sendRequest({ action: "get", resource: "dataContext[y]" });
+    inFlight.catch(() => undefined);          // still outstanding at the assertion below
+
+    const s = fresh.getStats();
+    expect(s.countDiReq - s.countDiRplSuccess - s.countDiRplFail - s.countDiReqFailed).toBe(1);
+
+    lastCallback()({ success: true });        // settle it so no deadline outlives the test
+    await inFlight;
   });
 
   it("records the time of the first data-interactive request", async () => {

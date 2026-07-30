@@ -277,8 +277,9 @@ declare const codapInterface: {
      *   being no connection to send on (before `initializePlugin()` or after `destroy()`), CODAP
      *   answering with no value at all, and the send itself throwing.
      *
-     * The callback is invoked exactly once, after the promise has settled. A callback written as
-     * `result.success` therefore has to handle the `undefined` it receives on failure. Note that the
+     * The callback is invoked exactly once, synchronously after the promise is resolved or rejected —
+     * that is, before any `.then` or `await` continuation runs, since those are microtasks. A callback
+     * written as `result.success` therefore has to handle the `undefined` it receives on failure. Note that the
      * promise rejects whether or not a callback is passed, so it still needs a `.catch` to avoid an
      * unhandled rejection. An exception thrown by the callback itself is rethrown as an uncaught error
      * rather than failing the request, which has already settled by then.

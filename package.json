@@ -42,6 +42,7 @@
   },
   "scripts": {
     "build": "run-s build:tsc build:rollup",
+    "prebuild:tsc": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
     "build:tsc": "tsc",
     "build:rollup": "rollup --config",
     "lint": "eslint \"./src/**/*.{js,jsx,ts,tsx}\"",

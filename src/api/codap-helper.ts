@@ -45,9 +45,13 @@ export const sendMessage = async (action: Action, resource: string, values?: Cod
 
 // Some helpers issue a request without awaiting it, so a rejection has nothing attached to observe
 // it. Report it rather than letting it surface as an unhandled rejection.
-const reportRequestFailure = (context: string, error?: unknown) => {
+//
+// `what` describes the specific thing that went wrong, not just the helper it went wrong in: for a
+// fire-and-forget helper this warning is the only diagnostic a plugin author gets, and one that
+// cannot say which of several outcomes occurred sends them reading source to find out.
+const reportRequestFailure = (what: string, error?: unknown) => {
   // eslint-disable-next-line no-console
-  console.warn(`${context} failed`, error ?? "");
+  console.warn(what, error ?? "");
 };
 
 ////////////// public API //////////////
@@ -87,9 +91,9 @@ export const selectSelf = () => {
     }, (result?: IResult) => {
       // an undefined result means CODAP didn't respond, which the catch below reports
       if (result && !result.success) {
-        reportRequestFailure("selectSelf");
+        reportRequestFailure("selectSelf: CODAP declined to select the component");
       }
-    }).catch(error => reportRequestFailure("selectSelf", error));
+    }).catch(error => reportRequestFailure("selectSelf: the select request failed", error));
   };
 
   codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result?: IResult) => {
@@ -99,12 +103,16 @@ export const selectSelf = () => {
     }
     // without the frame's id there is no component to select, and requesting `component[undefined]`
     // would ask CODAP to select something that cannot exist
-    if (!result.success || result.values?.id === undefined) {
-      reportRequestFailure("selectSelf");
+    if (!result.success) {
+      reportRequestFailure("selectSelf: CODAP declined the interactiveFrame lookup");
+      return;
+    }
+    if (result.values?.id === undefined) {
+      reportRequestFailure("selectSelf: the interactiveFrame reply carried no id");
       return;
     }
     return selectComponent(result.values.id);
-  }).catch(error => reportRequestFailure("selectSelf", error));
+  }).catch(error => reportRequestFailure("selectSelf: the interactiveFrame lookup failed", error));
 };
 
 export const addComponentListener = (callback: ClientHandler) => {

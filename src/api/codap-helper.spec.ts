@@ -9,8 +9,8 @@ const mockSendRequest = codapInterface.sendRequest as jest.Mock;
 
 const attr = { name: "Height" };
 
-/** Lets queued promise callbacks run, so a fire-and-forget helper's reporting can be observed. */
-function flushMicrotasks() {
+/** Yields to the task queue, so a fire-and-forget helper's queued reporting has run. */
+function flushQueued() {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
@@ -160,7 +160,7 @@ describe("selectSelf", () => {
 
     selectSelf();
     answer({ success: true, values: { id: 42 } });
-    await flushMicrotasks();
+    await flushQueued();
 
     expect(requests()[1]).toEqual({
       action: "notify", resource: "component[42]", values: { request: "select" }
@@ -175,10 +175,10 @@ describe("selectSelf", () => {
 
     selectSelf();
     answer({ success: false });
-    await flushMicrotasks();
+    await flushQueued();
 
     expect(requests()).toHaveLength(1);          // nothing to select, so no second request
-    expect(warn).toHaveBeenCalledWith("selectSelf failed", "");
+    expect(warn).toHaveBeenCalledWith("selectSelf: CODAP declined the interactiveFrame lookup", "");
   });
 
   // Without an id the resource would read `component[undefined]`, asking CODAP to select something
@@ -188,10 +188,10 @@ describe("selectSelf", () => {
 
     selectSelf();
     answer({ success: true, values: {} });
-    await flushMicrotasks();
+    await flushQueued();
 
     expect(requests()).toHaveLength(1);
-    expect(warn).toHaveBeenCalledWith("selectSelf failed", "");
+    expect(warn).toHaveBeenCalledWith("selectSelf: the interactiveFrame reply carried no id", "");
   });
 
   // An unanswered request invokes the callback with undefined *and* rejects. Reporting from both
@@ -201,9 +201,9 @@ describe("selectSelf", () => {
 
     selectSelf();
     answer(undefined);
-    await flushMicrotasks();
+    await flushQueued();
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith("selectSelf failed", new Error("no connection"));
+    expect(warn).toHaveBeenCalledWith("selectSelf: the interactiveFrame lookup failed", new Error("no connection"));
   });
 });
