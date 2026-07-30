@@ -15,7 +15,15 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   replied it was not invoked at all. A callback written as `result.success` therefore threw a
   `TypeError` at the 2s mark before succeeding normally, and a callback relying on being told about
   failure never was. Callbacks now need to handle `undefined`, which is the shape of a failure.
-- **A failed request rejects with an `Error`**, where it previously rejected with a string. Anything
+- **The callback parameter is typed, so a callback that cannot handle a failure no longer compiles.**
+  `sendRequest`'s second parameter was `any`, which accepted `(result: IResult) => result.success` —
+  the shape that throws a `TypeError` the moment a request fails. It is now `RequestCallback`
+  (exported), whose response parameter admits `undefined`. This is the one change here that breaks a
+  build rather than a run, which is the point: the contract above is what changed, and a compile error
+  names every callback that no longer matches the expected signature, at the moment of upgrading,
+  instead of leaving each one to throw on a failure path that may be rare in testing and common in
+  use. A callback that already handled absence needs nothing; one that did not needs its parameter
+  widened to `(result?: IResult)`. Anything
   matching on the rejection value (`error.startsWith(...)`, `error === "..."`) needs updating, and
   `error.message` is where the text now lives — note that `String(error)` prefixes it with `Error: `.
   Some of the text changed too: a request that outlives its deadline now reports

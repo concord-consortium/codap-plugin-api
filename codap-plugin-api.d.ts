@@ -1,3 +1,84 @@
+interface Attribute {
+    name: string;
+    formula?: string;
+    description?: string;
+    type?: string;
+    cid?: string;
+    precision?: string;
+    unit?: string;
+    editable?: boolean;
+    renameable?: boolean;
+    deleteable?: boolean;
+    hidden?: boolean;
+}
+interface CodapItemValues {
+    [attr: string]: any;
+}
+interface CodapItem {
+    id: number | string;
+    values: CodapItemValues;
+}
+type Action = "create" | "get" | "update" | "delete";
+
+interface IDimensions {
+    width: number;
+    height: number;
+}
+interface IInitializePlugin {
+    pluginName: string;
+    version: string;
+    dimensions: IDimensions;
+}
+interface IResult {
+    success: boolean;
+    values: any;
+}
+declare const sendMessage: (action: Action, resource: string, values?: CodapItemValues) => Promise<IResult>;
+declare const initializePlugin: (options: IInitializePlugin) => Promise<any>;
+declare const createTable: (dataContext: string, datasetName?: string) => Promise<IResult>;
+declare const selectSelf: () => void;
+declare const addComponentListener: (callback: ClientHandler) => void;
+declare const getListOfDataContexts: () => Promise<IResult>;
+declare const getDataContext: (dataContextName: string) => Promise<IResult>;
+declare const createDataContext: (dataContextName: string) => Promise<IResult>;
+declare const createDataContextFromURL: (url: string) => Promise<IResult>;
+declare const addDataContextsListListener: (callback: ClientHandler) => void;
+declare const addDataContextChangeListener: (dataContextName: string, callback: ClientHandler) => void;
+declare const getCollectionList: (dataContextName: string) => Promise<IResult>;
+declare const getCollection: (dataContextName: string, collectionName: string) => Promise<IResult>;
+declare const createParentCollection: (dataContextName: string, collectionName: string, attrs?: Attribute[]) => Promise<IResult>;
+declare const createChildCollection: (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => Promise<IResult>;
+declare const createNewCollection: (dataContextName: string, collectionName: string, attrs?: Attribute[]) => Promise<IResult>;
+declare const ensureUniqueCollectionName: (dataContextName: string, collectionName: string, index: number) => Promise<string | undefined>;
+declare const getAttribute: (dataContextName: string, collectionName: string, attributeName: string) => Promise<IResult>;
+declare const getAttributeList: (dataContextName: string, collectionName: string) => Promise<IResult>;
+declare const createNewAttribute: (dataContextName: string, collectionName: string, attributeName: string) => Promise<IResult>;
+declare const updateAttribute: (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => Promise<IResult>;
+declare const updateAttributePosition: (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => Promise<IResult>;
+declare const createCollectionFromAttribute: (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number | string) => Promise<IResult>;
+declare const getCaseCount: (dataContextName: string, collectionName: string) => Promise<IResult>;
+declare const getCaseByIndex: (dataContextName: string, collectionName: string, index: number) => Promise<IResult>;
+declare const getCaseByID: (dataContextName: string, caseID: number | string) => Promise<IResult>;
+declare const getCaseBySearch: (dataContextName: string, collectionName: string, search: string) => Promise<IResult>;
+declare const getCaseByFormulaSearch: (dataContextName: string, collectionName: string, search: string) => Promise<IResult>;
+declare const createSingleOrParentCase: (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => Promise<IResult>;
+declare const createChildCase: (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => Promise<IResult>;
+declare const updateCaseById: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
+declare const updateCases: (dataContextName: string, collectionName: string, values: CodapItem[]) => Promise<IResult>;
+declare const getSelectionList: (dataContextName: string) => Promise<IResult>;
+declare const selectCases: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
+declare const addCasesToSelection: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
+declare const getItemCount: (dataContextName: string) => Promise<IResult>;
+declare const getAllItems: (dataContextName: string) => Promise<IResult>;
+declare const getItemByID: (dataContextName: string, itemID: number | string) => Promise<IResult>;
+declare const getItemByIndex: (dataContextName: string, index: number) => Promise<IResult>;
+declare const getItemByCaseID: (dataContextName: string, caseID: number | string) => Promise<IResult>;
+declare const getItemBySearch: (dataContextName: string, search: string) => Promise<IResult>;
+declare const createItems: (dataContextName: string, items: Array<CodapItemValues>) => Promise<IResult>;
+declare const updateItemByID: (dataContextName: string, itemID: number | string, values: CodapItemValues) => Promise<IResult>;
+declare const updateItemByIndex: (dataContextName: string, index: number, values: CodapItemValues) => Promise<IResult>;
+declare const updateItemByCaseID: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
+
 interface IConfig {
     stateHandler?: (arg0: any) => void;
     customInteractiveStateHandler?: boolean;
@@ -24,6 +105,18 @@ interface ClientNotification {
     values: any;
 }
 type ClientHandler = (notification: ClientNotification) => void;
+/**
+ * What `sendRequest` passes a callback: CODAP's response, or `undefined` if the request failed.
+ *
+ * The `undefined` is the point of the type. A callback declared to take `IResult` alone does not
+ * satisfy it, and will not compile — which is the intent, because such a callback throws a
+ * `TypeError` the first time a request fails, on a path a plugin may not exercise until it is in
+ * front of users.
+ *
+ * A batched request — an array of requests — is answered with an array of results. That does not fit
+ * here, so batch through the returned promise rather than a callback.
+ */
+type RequestCallback = (response?: IResult, request?: any) => void;
 declare const codapInterface: {
     /**
      * Connection statistics
@@ -188,12 +281,14 @@ declare const codapInterface: {
      * rather than failing the request, which has already settled by then.
      *
      * @param message {Object} The request, as in the Data Interactive API.
-     * @param callback {function(response, request)} Optional. Receives the response, or `undefined`
-     *    if the request failed, followed by the original request.
+     * @param callback {RequestCallback} Optional. Receives the response, or `undefined` if the request
+     *    failed, followed by the original request. Its parameter has to admit `undefined`: a callback
+     *    typed for the response alone does not compile, because it is the one that throws when a
+     *    request fails.
      *
      * @return {Promise} The promise of the response from CODAP.
      */
-    sendRequest(message: any, callback?: any): Promise<unknown>;
+    sendRequest(message: any, callback?: RequestCallback): Promise<unknown>;
     /**
      * Registers a handler to respond to CODAP-initiated requests and
      * notifications. See {@link https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-API#codap-initiated-actions}
@@ -217,85 +312,4 @@ declare const codapInterface: {
     parseResourceSelector(iResource: string): any;
 };
 
-interface Attribute {
-    name: string;
-    formula?: string;
-    description?: string;
-    type?: string;
-    cid?: string;
-    precision?: string;
-    unit?: string;
-    editable?: boolean;
-    renameable?: boolean;
-    deleteable?: boolean;
-    hidden?: boolean;
-}
-interface CodapItemValues {
-    [attr: string]: any;
-}
-interface CodapItem {
-    id: number | string;
-    values: CodapItemValues;
-}
-type Action = "create" | "get" | "update" | "delete";
-
-interface IDimensions {
-    width: number;
-    height: number;
-}
-interface IInitializePlugin {
-    pluginName: string;
-    version: string;
-    dimensions: IDimensions;
-}
-interface IResult {
-    success: boolean;
-    values: any;
-}
-declare const sendMessage: (action: Action, resource: string, values?: CodapItemValues) => Promise<IResult>;
-declare const initializePlugin: (options: IInitializePlugin) => Promise<any>;
-declare const createTable: (dataContext: string, datasetName?: string) => Promise<IResult>;
-declare const selectSelf: () => void;
-declare const addComponentListener: (callback: ClientHandler) => void;
-declare const getListOfDataContexts: () => Promise<IResult>;
-declare const getDataContext: (dataContextName: string) => Promise<IResult>;
-declare const createDataContext: (dataContextName: string) => Promise<IResult>;
-declare const createDataContextFromURL: (url: string) => Promise<IResult>;
-declare const addDataContextsListListener: (callback: ClientHandler) => void;
-declare const addDataContextChangeListener: (dataContextName: string, callback: ClientHandler) => void;
-declare const getCollectionList: (dataContextName: string) => Promise<IResult>;
-declare const getCollection: (dataContextName: string, collectionName: string) => Promise<IResult>;
-declare const createParentCollection: (dataContextName: string, collectionName: string, attrs?: Attribute[]) => Promise<IResult>;
-declare const createChildCollection: (dataContextName: string, collectionName: string, parentCollectionName: string, attrs?: Attribute[]) => Promise<IResult>;
-declare const createNewCollection: (dataContextName: string, collectionName: string, attrs?: Attribute[]) => Promise<IResult>;
-declare const ensureUniqueCollectionName: (dataContextName: string, collectionName: string, index: number) => Promise<string | undefined>;
-declare const getAttribute: (dataContextName: string, collectionName: string, attributeName: string) => Promise<IResult>;
-declare const getAttributeList: (dataContextName: string, collectionName: string) => Promise<IResult>;
-declare const createNewAttribute: (dataContextName: string, collectionName: string, attributeName: string) => Promise<IResult>;
-declare const updateAttribute: (dataContextName: string, collectionName: string, attributeName: string, attribute: Attribute, values: CodapItemValues) => Promise<IResult>;
-declare const updateAttributePosition: (dataContextName: string, collectionName: string, attrName: string, newPosition: number) => Promise<IResult>;
-declare const createCollectionFromAttribute: (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number | string) => Promise<IResult>;
-declare const getCaseCount: (dataContextName: string, collectionName: string) => Promise<IResult>;
-declare const getCaseByIndex: (dataContextName: string, collectionName: string, index: number) => Promise<IResult>;
-declare const getCaseByID: (dataContextName: string, caseID: number | string) => Promise<IResult>;
-declare const getCaseBySearch: (dataContextName: string, collectionName: string, search: string) => Promise<IResult>;
-declare const getCaseByFormulaSearch: (dataContextName: string, collectionName: string, search: string) => Promise<IResult>;
-declare const createSingleOrParentCase: (dataContextName: string, collectionName: string, values: Array<CodapItemValues>) => Promise<IResult>;
-declare const createChildCase: (dataContextName: string, collectionName: string, parentCaseID: number | string, values: CodapItemValues) => Promise<IResult>;
-declare const updateCaseById: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
-declare const updateCases: (dataContextName: string, collectionName: string, values: CodapItem[]) => Promise<IResult>;
-declare const getSelectionList: (dataContextName: string) => Promise<IResult>;
-declare const selectCases: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
-declare const addCasesToSelection: (dataContextName: string, caseIds: Array<string | number>) => Promise<IResult>;
-declare const getItemCount: (dataContextName: string) => Promise<IResult>;
-declare const getAllItems: (dataContextName: string) => Promise<IResult>;
-declare const getItemByID: (dataContextName: string, itemID: number | string) => Promise<IResult>;
-declare const getItemByIndex: (dataContextName: string, index: number) => Promise<IResult>;
-declare const getItemByCaseID: (dataContextName: string, caseID: number | string) => Promise<IResult>;
-declare const getItemBySearch: (dataContextName: string, search: string) => Promise<IResult>;
-declare const createItems: (dataContextName: string, items: Array<CodapItemValues>) => Promise<IResult>;
-declare const updateItemByID: (dataContextName: string, itemID: number | string, values: CodapItemValues) => Promise<IResult>;
-declare const updateItemByIndex: (dataContextName: string, index: number, values: CodapItemValues) => Promise<IResult>;
-declare const updateItemByCaseID: (dataContextName: string, caseID: number | string, values: CodapItemValues) => Promise<IResult>;
-
-export { type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, addCasesToSelection, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, getSelectionList, initializePlugin, selectCases, selectSelf, sendMessage, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };
+export { type ClientHandler, type ClientNotification, type IConfig, type IDimensions, type IInitializePlugin, type IResult, type RequestCallback, addCasesToSelection, addComponentListener, addDataContextChangeListener, addDataContextsListListener, codapInterface, createChildCase, createChildCollection, createCollectionFromAttribute, createDataContext, createDataContextFromURL, createItems, createNewAttribute, createNewCollection, createParentCollection, createSingleOrParentCase, createTable, ensureUniqueCollectionName, getAllItems, getAttribute, getAttributeList, getCaseByFormulaSearch, getCaseByID, getCaseByIndex, getCaseBySearch, getCaseCount, getCollection, getCollectionList, getDataContext, getItemByCaseID, getItemByID, getItemByIndex, getItemBySearch, getItemCount, getListOfDataContexts, getSelectionList, initializePlugin, selectCases, selectSelf, sendMessage, updateAttribute, updateAttributePosition, updateCaseById, updateCases, updateItemByCaseID, updateItemByID, updateItemByIndex };

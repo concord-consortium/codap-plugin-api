@@ -1,3 +1,4 @@
+import type { IResult } from "./codap-helper";
 import { codapInterface } from "./codap-interface";
 
 // iframe-phone invokes the callback passed to `call()` with `undefined` when its hard-coded 2s
@@ -77,6 +78,27 @@ async function initInterface() {
   await initPromise;
   mockCall.mockClear();
 }
+
+// The contract's central claim is that a callback receives `undefined` when a request fails, so a
+// callback that cannot accept `undefined` is wrong and should say so at build time rather than throw
+// a TypeError on a failure path in front of users. These assert that at the type level: if the
+// parameter ever loosens back to `any`, the @ts-expect-error stops being an error and this file
+// fails to compile.
+describe("the callback type", () => {
+  // Read off sendRequest itself rather than the exported alias, so this pins the signature a
+  // consumer is actually held to.
+  type Accepted = NonNullable<Parameters<typeof codapInterface.sendRequest>[1]>;
+
+  it("rejects a callback that cannot receive a failure", () => {
+    // @ts-expect-error a callback typed for the response alone cannot handle a failed request
+    const cannotFail: Accepted = (result: IResult) => result.success;
+    const canFail: Accepted = (result?: IResult) => result?.success;
+
+    // never invoked: the assertions above are the test, and calling `cannotFail` with the
+    // `undefined` it refuses to admit is precisely the TypeError the type exists to prevent
+    expect([cannotFail, canFail].every(fn => typeof fn === "function")).toBe(true);
+  });
+});
 
 describe("codapInterface.sendRequest", () => {
   beforeEach(async () => {

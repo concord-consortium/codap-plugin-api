@@ -152,6 +152,19 @@ export interface ClientNotification {
 }
 export type ClientHandler = (notification: ClientNotification) => void;
 
+/**
+ * What `sendRequest` passes a callback: CODAP's response, or `undefined` if the request failed.
+ *
+ * The `undefined` is the point of the type. A callback declared to take `IResult` alone does not
+ * satisfy it, and will not compile — which is the intent, because such a callback throws a
+ * `TypeError` the first time a request fails, on a path a plugin may not exercise until it is in
+ * front of users.
+ *
+ * A batched request — an array of requests — is answered with an array of results. That does not fit
+ * here, so batch through the returned promise rather than a callback.
+ */
+export type RequestCallback = (response?: IResult, request?: any) => void;
+
 let interactiveState = {};
 
 /**
@@ -238,14 +251,8 @@ interface IRequestOptions {
    * Invoked with the response on success and with `undefined` on failure. See `sendRequest`, whose
    * JSDoc carries this contract for consumers — this interface is module-private and never reaches
    * the published type declarations.
-   *
-   * TODO: type this as `(response?: IResult, request?: any) => void`. As `any` it accepts a
-   * consumer's `(result: IResult) => result.success`, which compiles and then throws the first time
-   * a request goes unanswered — the very defect this contract exists to prevent — and it is why the
-   * helpers' signatures had to be corrected by hand rather than by the compiler. Tightening it
-   * breaks consumers' builds, so it belongs in a release that expects to.
    */
-  callback?: any
+  callback?: RequestCallback
   /**
    * Reject as soon as iframe-phone reports no reply, instead of waiting out `requestTimeout`.
    *
@@ -354,10 +361,12 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
         // must not escape into iframe-phone's listener, the deadline timer, or this executor —
         // see reportCallbackError.
         try {
-          const callbackResult = callback(callbackResponse, message);
-          // an async callback reports a throw as a rejected return value, which the catch can't see
-          if (callbackResult && typeof callbackResult.then === "function") {
-            callbackResult.then(undefined, reportCallbackError);
+          // An async callback reports a throw as a rejected return value, which the catch can't see.
+          // `RequestCallback` returns `void`, but TypeScript lets a callback in that position return
+          // a value anyway, so an async one arrives here as a promise and has to be observed.
+          const callbackResult = callback(callbackResponse, message) as unknown;
+          if (callbackResult && typeof (callbackResult as PromiseLike<unknown>).then === "function") {
+            (callbackResult as PromiseLike<unknown>).then(undefined, reportCallbackError);
           }
         } catch (error) {
           reportCallbackError(error);
@@ -684,12 +693,14 @@ export const codapInterface = {
    * rather than failing the request, which has already settled by then.
    *
    * @param message {Object} The request, as in the Data Interactive API.
-   * @param callback {function(response, request)} Optional. Receives the response, or `undefined`
-   *    if the request failed, followed by the original request.
+   * @param callback {RequestCallback} Optional. Receives the response, or `undefined` if the request
+   *    failed, followed by the original request. Its parameter has to admit `undefined`: a callback
+   *    typed for the response alone does not compile, because it is the one that throws when a
+   *    request fails.
    *
    * @return {Promise} The promise of the response from CODAP.
    */
-  sendRequest (message: any, callback?: any) {
+  sendRequest (message: any, callback?: RequestCallback) {
     return issueRequest(message, { callback });
   },
 
