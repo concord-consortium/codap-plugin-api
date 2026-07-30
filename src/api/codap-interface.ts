@@ -269,20 +269,26 @@ interface IRequestOptions {
    */
   callback?: EitherRequestCallback
   /**
-   * Reject as soon as iframe-phone reports no reply, instead of waiting out `requestTimeout`.
+   * Treat silence as an outcome: fail as soon as iframe-phone reports no reply, rather than waiting
+   * out `requestTimeout`, running this first.
    *
-   * Set only for the handshake in `init()`, and a deliberate trade rather than a safe inference.
+   * Supplied only by the handshake in `init()`, and a deliberate trade rather than a safe inference.
    * Silence at 2s does not prove nothing is listening: iframe-phone buffers into `postMessageQueue`
    * until the parent answers its repeated "hello", while the 2s probe is armed when `call` is
    * invoked — so a parent slow to complete that exchange looks the same as no parent at all. We
    * accept that, because the alternative is a plugin loaded outside CODAP hanging for the full
    * request timeout before it can say so, and because a plugin that does load in CODAP can retry.
    *
+   * It is a callback rather than a flag so that acting on silence is *caused by* observing silence.
+   * Inferring it from the request having failed catches every other way a request can fail with it —
+   * CODAP declining, CODAP answering emptily, the message failing to post — none of which say
+   * anything about whether CODAP is there.
+   *
    * This is a property of the individual request rather than of the connection state, so an
    * ordinary request issued while the handshake is outstanding is still treated as an ordinary
    * request.
    */
-  failFastWithoutReply?: boolean
+  onSilence?: () => void
 }
 
 /**
@@ -360,7 +366,7 @@ function markConnectionActive () {
  * Issues a request to CODAP and returns a promise of the response.
  */
 function issueRequest (message: any, options: IRequestOptions = {}) {
-  const { callback, failFastWithoutReply = false } = options;
+  const { callback, onSilence } = options;
   return new Promise(function (resolve, reject) {
     let isSettled = false;
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
@@ -446,7 +452,8 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
           // Nothing has answered within iframe-phone's advisory 2s. The request is still in flight,
           // so this is not an outcome — except during the handshake, where silence is the answer.
           stats.countDiRplTimeout++;
-          if (failFastWithoutReply) {
+          if (onSilence) {
+            onSilence();
             settleFailure("handleResponse: CODAP request timed out: " + describeMessage(message));
           }
           return;
@@ -567,37 +574,39 @@ export const codapInterface = {
       }
 
       /**
-       * Fails the handshake, and closes the connection with it.
+       * Closes the connection, because nothing answered the handshake.
        *
-       * Only for a handshake nothing answered. That leaves an endpoint nothing is listening to, and
-       * left in place it looks live to `issueRequest`, so every later request would be sent and then
-       * wait out the full deadline — a minute apiece for a plugin already told it is not running
-       * inside CODAP. Closing it means those requests are refused at once, which is what `init()`
-       * rejecting is supposed to have told the caller. `init()` can be called again to retry.
+       * Passed as `onSilence`, so this runs when silence is *observed* rather than when the handshake
+       * is found to have failed. Every other way it can fail — CODAP declining, CODAP answering
+       * emptily, the message failing to post — says nothing about whether CODAP is there, and leaves
+       * the connection alone.
        *
-       * Silence here is weaker evidence than silence would be for an ordinary request, which is why
-       * this is confined to the handshake: iframe-phone arms its 2s timer when `call` is invoked but
-       * queues the message until the parent answers its repeated hello, so the window covers that
-       * exchange as well as the round trip. What it does not cover is CODAP thinking hard — the
-       * handshake asks it to do nothing expensive — so silence is much better evidence of "nothing
-       * is there" here than it would be for a request that asks CODAP to create several thousand
-       * items.
+       * An endpoint nothing is listening to looks live to `issueRequest`, so left in place every
+       * later request would be sent and then wait out the full deadline: a minute apiece for a plugin
+       * already told it is not running inside CODAP. Closing it means those are refused at once,
+       * which is what `init()` rejecting is supposed to have told the caller, and `init()` can be
+       * called again to retry.
        *
-       * Only this handshake's own endpoint is torn down. Two `init()` calls can overlap — React's
+       * Silence here is weaker evidence than it looks: iframe-phone arms its 2s timer when `call` is
+       * invoked but queues the message until the parent answers its repeated hello, so the window
+       * covers that exchange as well as the round trip. What it does not cover is CODAP thinking
+       * hard — the handshake asks it to do nothing expensive — which is what separates it from the
+       * slow requests this deadline handling exists to stop failing.
+       *
+       * Only this handshake's own endpoint is closed. Two `init()` calls can overlap — React's
        * StrictMode double-invokes effects, and the README's example initializes in one — and the
        * loser must not close the connection the winner established.
        */
-      function failHandshake(reason: unknown) {
+      function closeSilentConnection() {
         if (connection === endpoint) {
           connection = null;
           connectionState = "closed";
         }
-        rejectHandshake(reason);
       }
 
       function getFrameRespHandler(resp: { values: { error: any; savedState: any }; success: boolean }[]) {
         // `resp` is always defined here: a handshake that drew no reply rejects rather than
-        // resolving, so it reaches failHandshake instead of this function.
+        // resolving, so it reaches rejectHandshake instead of this function.
         const success = resp && resp[1] && resp[1].success;
         const receivedFrame = success && resp[1].values;
         const savedState = receivedFrame && receivedFrame.savedState;
@@ -654,8 +663,8 @@ export const codapInterface = {
 
       // console.log('sending interactiveState: ' + JSON.stringify(this_.getInteractiveState));
       // update, then get the interactiveFrame.
-      return issueRequest([updateFrameReq, getFrameReq], { failFastWithoutReply: true })
-        .then(getFrameRespHandler as any, failHandshake);
+      return issueRequest([updateFrameReq, getFrameReq], { onSilence: closeSilentConnection })
+        .then(getFrameRespHandler as any, rejectHandshake);
     }.bind(this));
   },
 

@@ -79,10 +79,12 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   requests are now refused at once. `init()` can be called again to retry, and it rejects with an
   `Error` like every other failure.
 
-  Only silence closes the connection. A handshake CODAP *answers* and declines leaves it open, since
-  CODAP is evidently there and listening; only the handshake fails. And a handshake closes only the
-  endpoint it created, so of two overlapping `init()` calls — which React's StrictMode produces from
-  a single effect — the one that fails cannot close the connection the other established.
+  Only silence closes the connection, and every other way the handshake can fail leaves it open,
+  because none of them says anything about whether CODAP is there: CODAP answering and declining,
+  CODAP answering with no value, and the handshake message failing to post all leave a usable
+  connection and fail only the handshake. And a handshake closes only the endpoint it created, so of
+  two overlapping `init()` calls — which React's StrictMode produces from a single effect — the one
+  that fails cannot close the connection the other established.
 
 ### Changed
 

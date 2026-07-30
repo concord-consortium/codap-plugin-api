@@ -457,6 +457,27 @@ describe("codapInterface.init", () => {
     await expect(request).resolves.toEqual({ success: true });
   });
 
+  // CODAP answering with nothing is still CODAP answering: the reply arrived, so something is there.
+  it("leaves the connection usable when CODAP answers the handshake with no value", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+    lastCallback()(undefined);            // one argument: a real reply, carrying nothing
+
+    await expect(initPromise).rejects.toThrow(/no result/);
+    expect(fresh.getConnectionState()).not.toBe("closed");
+  });
+
+  // The endpoint is fine; the message was not. Nothing here says whether CODAP is listening.
+  it("leaves the connection usable when the handshake cannot be posted", async () => {
+    const fresh = await freshInterface();
+    mockCall.mockImplementationOnce(() => {
+      throw new DOMException("value could not be cloned", "DataCloneError");
+    });
+
+    await expect(fresh.init({ name: "test", title: "test" } as any)).rejects.toThrow(/cloned/);
+    expect(fresh.getConnectionState()).not.toBe("closed");
+  });
+
   // React's StrictMode double-invokes effects, and the README initializes from one, so two
   // handshakes can be outstanding at once. The loser must not close the winner's connection: an
   // init() that resolved and then handed back a dead connection reports nothing at all.
