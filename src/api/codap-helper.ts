@@ -33,6 +33,27 @@ export const sendMessage = async (action: Action, resource: string, values?: Cod
   return await codapInterface.sendRequest(message) as unknown as IResult;
 };
 
+// CODAP answers a request with success true or false; it may also not answer at all, in which case
+// a callback receives `undefined`. Absence of a response is not a failure response — it licenses no
+// conclusion about what CODAP did — so each call site has to decide what not knowing means for it.
+//
+// Prefer the promise form (`sendMessage`, or `await codapInterface.sendRequest(...)`) in helpers
+// that consume the answer: absence then arrives as a rejection, which is noisy if unhandled,
+// whereas an unchecked `undefined` yields a plausible-looking wrong answer. The callback form suits
+// a fire-and-forget request that nothing depends on — but the promise still rejects on failure
+// whether or not anyone is reading it, so such a call needs a `.catch` as well as its callback.
+
+// Some helpers issue a request without awaiting it, so a rejection has nothing attached to observe
+// it. Report it rather than letting it surface as an unhandled rejection.
+//
+// `what` describes the specific thing that went wrong, not just the helper it went wrong in: for a
+// fire-and-forget helper this warning is the only diagnostic a plugin author gets, and one that
+// cannot say which of several outcomes occurred sends them reading source to find out.
+const reportRequestFailure = (what: string, error?: unknown) => {
+  // eslint-disable-next-line no-console
+  console.warn(what, error ?? "");
+};
+
 ////////////// public API //////////////
 
 export const initializePlugin = async (options: IInitializePlugin) => {
@@ -61,24 +82,37 @@ export const createTable = async (dataContext: string, datasetName?: string) => 
 // Selects this component. In CODAP this will bring this component to the front.
 export const selectSelf = () => {
 
+  // Neither request is awaited. A failed request reports an undefined result to its callback.
   const selectComponent = async function (id: number) {
     return codapInterface.sendRequest({
       action: "notify",
       resource:  `component[${id}]`,
       values: {request: "select"}
-    }, (result: IResult) => {
-      if (!result.success) {
-        // eslint-disable-next-line no-console
-        console.log("selectSelf failed");
+    }, (result?: IResult) => {
+      // an undefined result means CODAP didn't respond, which the catch below reports
+      if (result && !result.success) {
+        reportRequestFailure("selectSelf: CODAP declined to select the component");
       }
-    });
+    }).catch(error => reportRequestFailure("selectSelf: the select request failed", error));
   };
 
-  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result: IResult) => {
-    if (result.success) {
-      return selectComponent(result.values.id);
+  codapInterface.sendRequest({action: "get", resource: "interactiveFrame"}, (result?: IResult) => {
+    // an undefined result means CODAP didn't respond, which the catch below reports
+    if (!result) {
+      return;
     }
-  });
+    // without the frame's id there is no component to select, and requesting `component[undefined]`
+    // would ask CODAP to select something that cannot exist
+    if (!result.success) {
+      reportRequestFailure("selectSelf: CODAP declined the interactiveFrame lookup");
+      return;
+    }
+    if (result.values?.id === undefined) {
+      reportRequestFailure("selectSelf: the interactiveFrame reply carried no id");
+      return;
+    }
+    return selectComponent(result.values.id);
+  }).catch(error => reportRequestFailure("selectSelf: the interactiveFrame lookup failed", error));
 };
 
 export const addComponentListener = (callback: ClientHandler) => {
@@ -170,23 +204,24 @@ export const createNewCollection = (dataContextName: string, collectionName: str
 
 export const ensureUniqueCollectionName = async (dataContextName: string, collectionName: string, index: number): Promise<string | undefined> => {
   index = index || 0;
+  // guard against runaway loops. `> 100` rather than `>= 100` so that the hundredth suffix is still
+  // tried: the candidates are `collectionName` through `collectionName100`, and stopping at 99 would
+  // report no name available while one still was.
+  if (index > 100) {
+    return undefined;
+  }
   const uniqueName = `${collectionName}${index !== 0 ? index : ""}`;
   const getCollMessage = {
     "action": "get",
     "resource": `${ctxStr(dataContextName)}.collection[${uniqueName}]`
   };
 
-  const result: IResult = await new Promise((resolve) => {
-    codapInterface.sendRequest(getCollMessage, (res: IResult) => {
-      resolve(res);
-    });
-  });
+  // sendRequest rejects when CODAP doesn't respond, so awaiting it throws here. Not hearing back
+  // says nothing about whether the collection exists, so let that reach the caller rather than
+  // concluding the name is free and risking a duplicate.
+  const result = await codapInterface.sendRequest(getCollMessage) as unknown as IResult;
 
   if (result.success) {
-    // guard against runaway loops
-    if (index >= 100) {
-      return undefined;
-    }
     return ensureUniqueCollectionName(dataContextName, collectionName, index + 1);
   } else {
     return uniqueName;
@@ -227,35 +262,59 @@ export const updateAttributePosition = (dataContextName: string, collectionName:
   });
 };
 
-export const createCollectionFromAttribute = (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string) => {
+// Reorganizes the attribute into its own collection. Each step depends on the answer to the one
+// before it, so this follows the promise-form guidance above: it awaits every request and resolves
+// with the result of the last step it reached — the attribute move when every step ran, or the step
+// CODAP refused. A request that goes unanswered rejects.
+//
+// Note what the resolved result does and does not tell the caller: that the steps this function
+// issued succeeded. It does not report what CODAP did in response, in particular whether the old
+// collection was removed once its last attribute left.
+export const createCollectionFromAttribute = async (dataContextName: string, oldCollectionName: string, attr: Attribute, parent: number|string): Promise<IResult> => {
   // check if a collection for the attribute already exists
   const getCollectionMessage = createMessage("get", `${ctxStr(dataContextName)}.${collStr(attr.name)}`);
+  const existingCollection = await codapInterface.sendRequest(getCollectionMessage) as unknown as IResult;
 
-  return codapInterface.sendRequest(getCollectionMessage, async (result: IResult) => {
-    // since you can't "re-parent" collections we need to create a temp top level collection, move the attribute,
-    // and then check if CODAP deleted the old collection as it became empty and if so rename the new collection
-    const moveCollection = result.success && (result.values.attrs.length === 1 || attr.name === oldCollectionName);
-    const newCollectionName = moveCollection ? await ensureUniqueCollectionName(dataContextName, attr.name, 0) : attr.name;
-    if (newCollectionName === undefined) {
-      return;
-    }
-    const _parent = parent === "root" ? "_root_" : parent;
-    const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
-      "name": newCollectionName,
-      "title": newCollectionName,
-      parent: _parent,
-    });
+  // Since you can't "re-parent" collections, the attribute gets a new collection of its own and is
+  // moved into it. When the attribute is the only one left in its old collection, or is the one the
+  // collection is named for, that new collection takes a name derived from the attribute's — and
+  // CODAP removes the old collection once it is empty.
+  // (a successful lookup for a collection with no attribute list leaves `attrs` undefined, hence `?.`)
+  const moveCollection = existingCollection.success &&
+    (existingCollection.values?.attrs?.length === 1 || attr.name === oldCollectionName);
+  const newCollectionName = moveCollection
+    ? await ensureUniqueCollectionName(dataContextName, attr.name, 0)
+    : attr.name;
+  if (newCollectionName === undefined) {
+    // no unused name was available, so there is nothing to create the collection under. Nothing was
+    // asked of CODAP and nothing went wrong with the connection, so this is a refusal rather than a
+    // rejection: report it in the shape CODAP uses for a request it declines, and let the caller
+    // read `success` the same way it does for every other step.
+    return {
+      success: false,
+      values: { error: `createCollectionFromAttribute: no unused collection name based on "${attr.name}"` }
+    };
+  }
 
-    return codapInterface.sendRequest(createCollectionRequest, (createCollResult: IResult) => {
-      if (createCollResult.success) {
-        const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
-          "collection": newCollectionName,
-          "position": 0
-        });
-        return codapInterface.sendRequest(moveAttributeRequest);
-      }
-    });
+  const _parent = parent === "root" ? "_root_" : parent;
+  const createCollectionRequest = createMessage("create", `${ctxStr(dataContextName)}.collection`, {
+    "name": newCollectionName,
+    "title": newCollectionName,
+    parent: _parent,
   });
+  const createCollectionResult = await codapInterface.sendRequest(createCollectionRequest) as unknown as IResult;
+  if (!createCollectionResult.success) {
+    // without the new collection there is nowhere to move the attribute to
+    return createCollectionResult;
+  }
+
+  const moveAttributeRequest = createMessage("update", `${ctxStr(dataContextName)}.${collStr(oldCollectionName)}.attributeLocation[${attr.name}]`, {
+    "collection": newCollectionName,
+    "position": 0
+  });
+  // moving the attribute is what makes the new collection the attribute's collection, so this is the
+  // result that answers whether the reorganization happened
+  return await codapInterface.sendRequest(moveAttributeRequest) as unknown as IResult;
 };
 
 ////////////// case functions //////////////

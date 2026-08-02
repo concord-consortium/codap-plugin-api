@@ -19,5 +19,13 @@
   },
   "include": [
     "./src/**/*"
+  ],
+  // Keep test files out of the build output; jest's testRegex would otherwise match the compiled
+  // copies and run every suite twice. src/test is deliberately not excluded: setupTests.ts is what
+  // pulls in the ambient jest globals, and jest's testRegex doesn't match its name.
+  "exclude": [
+    "./src/**/*.spec.ts",
+    "./src/**/*.test.ts",
+    "./src/**/__tests__"
   ]
 }
