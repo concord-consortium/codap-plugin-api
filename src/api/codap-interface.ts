@@ -361,10 +361,23 @@ function afterHandshake (step: ((state: any) => void) | undefined, state: any) {
 }
 
 /**
- * Records that CODAP is talking to us — unless the caller has torn the connection down, in which
- * case traffic still arriving must not reopen a connection they closed. `destroy()` does not
- * unsubscribe from iframe-phone, and a reply to a request that was already in flight can arrive
- * after it, so both this module's inbound paths have to check.
+ * Records that CODAP is talking to us. This is the module's only source of positive evidence that
+ * CODAP is there, and both inbound paths — replies and notifications — run through it.
+ *
+ * It exists to serve one rule, which the connection lifecycle rests on:
+ *
+ *   **Silence is only ever evidence of absence, and anything CODAP has actually done outranks it.**
+ *
+ * Silence means iframe-phone's advisory 2s timer expiring with no reply, and the only place this
+ * module acts on it is `init()`'s handshake. Evidence outranks it in all three senses: by cause,
+ * since a failure that is not silence — CODAP declining, answering emptily, a message that could not
+ * be sent — is not evidence of absence at all; by state, since a reply or notification already seen
+ * means the connection stays open however the handshake ends; and by time, since evidence arriving
+ * after silence was acted on reopens the connection rather than being discarded for being late.
+ *
+ * The exception is `destroy()`, which is the caller deciding rather than this module inferring. It
+ * drops the endpoint, so the `connection` check below fails and traffic still arriving — `destroy()`
+ * does not unsubscribe from iframe-phone — cannot reopen a connection the caller closed.
  */
 function markConnectionActive () {
   if (connection) {
