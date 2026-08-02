@@ -449,9 +449,16 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
      *    the request at once. See `connection`'s type for why this argument has to be declared.
      */
     function handleResponse (response: CodapResponse | undefined | null, noReplyYet?: Error) {
+      // Anything other than the probe is CODAP replying, and a reply is evidence it is there whenever
+      // it arrives — including for a request that has already given up on it. Recorded before the
+      // settled check, so that evidence is never discarded for arriving late: a CODAP slow to finish
+      // iframe-phone's hello exchange answers a handshake that has already been failed for silence,
+      // and that answer is what reopens the connection.
+      if (!noReplyYet) { markConnectionActive(); }
+
       // A reply can still arrive after the deadline rejected the request. Returning early keeps it
-      // from marking the connection active or counting a success against a request the caller has
-      // already been told failed.
+      // from counting a success, or settling again, against a request the caller has already been
+      // told failed.
       if (isSettled) { return; }
 
       // `null` is grouped with `undefined` deliberately: it is just as empty an answer, and reading
@@ -483,11 +490,9 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
         // CODAP answered, with no value. That is a real answer and settles the request, but there
         // is no result for the caller to read, so it fails rather than resolving with `undefined`
         // and handing the caller something `result.success` throws on.
-        markConnectionActive();
         settleFailure("handleResponse: CODAP answered with no result: " + describeMessage(message));
         return;
       }
-      markConnectionActive();
       // A batched request — an array of requests — is answered with an array of results, which has no
       // top-level `success` to read. It counts as the one request it was, and as a success only if
       // every result in it succeeded, so the counters keep reconciling against `countDiReq`. A reply
@@ -578,11 +583,12 @@ export const codapInterface = {
    * if the handshake does not succeed. The callback is invoked either way, as `sendRequest`'s is:
    * with the saved state on success, and with `undefined` on failure.
    *
-   * **When nothing answers the handshake the connection is closed**, so requests issued afterwards
-   * are refused at once rather than each waiting out `getRequestTimeout()`. The trigger is
+   * **When nothing answers the handshake the connection is marked closed**, so requests issued
+   * afterwards are refused at once rather than each waiting out `getRequestTimeout()`. The trigger is
    * iframe-phone's own 2 second advisory window, which is not proof that CODAP is absent: a CODAP
-   * that is alive but slow to complete the underlying "hello" exchange looks the same from here, and
-   * its connection will be closed. Call `init()` again to retry — it re-establishes the connection.
+   * that is alive but slow to complete the underlying "hello" exchange looks the same from here.
+   * That guess is not final, though — if CODAP answers after all, the connection reopens by itself
+   * and requests resume. Calling `init()` again also re-establishes it.
    *
    * Any other failure leaves the connection usable and fails only the handshake, since none of them
    * says anything about whether CODAP is there: CODAP answering and declining, CODAP answering with
@@ -646,7 +652,12 @@ export const codapInterface = {
         // `init()` sets the state back to "preinit" before each handshake, so a deliberate re-init
         // that genuinely draws no reply still closes the connection.
         if (connection === endpoint && connectionState !== "active") {
-          connection = null;
+          // The state is closed but the endpoint is kept. Requests are refused either way, since the
+          // `case "closed"` branch does not consult it — but keeping it is what lets a reply arriving
+          // later reopen the connection, through `markConnectionActive`. A CODAP merely slow to
+          // finish iframe-phone's hello exchange therefore recovers by itself, rather than being
+          // locked out by a guess made at two seconds. `destroy()` is the deliberate teardown, and
+          // that one does drop the endpoint.
           connectionState = "closed";
         }
       }

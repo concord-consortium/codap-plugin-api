@@ -518,6 +518,27 @@ describe("codapInterface.init", () => {
     await expect(request).resolves.toEqual({ success: true });
   });
 
+  // The case the two-second guess exists to serve, and the one it can get wrong: a CODAP that was
+  // there all along, just slow to finish iframe-phone's hello exchange. Its answer arrives after the
+  // connection has been closed for silence, and evidence outranks silence whenever it arrives, so
+  // the answer reopens the connection rather than being discarded for being late.
+  it("reopens a connection closed for silence when CODAP answers after all", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+
+    advisoryTimeout(lastCallback());
+    await expect(initPromise).rejects.toThrow(/timed out/);
+    expect(fresh.getConnectionState()).toBe("closed");
+
+    // iframe-phone keeps the callback after its advisory timer fires, so the real reply still lands
+    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
+    expect(fresh.getConnectionState()).toBe("active");
+
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
   // A reply is not the only thing that proves CODAP is there. A notification arrives on the same
   // channel and marks the connection active by a different route, so it counts as evidence too.
   it("keeps a connection CODAP sent a notification on during the handshake", async () => {

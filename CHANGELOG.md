@@ -84,10 +84,12 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
 
   **What counts as "nothing answers" is iframe-phone's own 2 second advisory window**, and that is
   not proof CODAP is absent: a CODAP that is alive but slow to complete the underlying "hello"
-  exchange looks identical from here, and its connection will be closed where on `^0.1.9` it stayed
-  usable. Calling `init()` again re-establishes it. The trade is deliberate — the alternative is a
-  plugin loaded outside CODAP waiting a full minute per request to find out — and the handshake asks
-  CODAP for far less work than the requests this release exists to stop failing.
+  exchange looks identical from here. The guess is not final, though. If that CODAP answers after
+  all, its reply reopens the connection and requests resume, so being slow costs a plugin the
+  handshake rather than the session; calling `init()` again also re-establishes it. The trade is
+  deliberate — the alternative is a plugin loaded outside CODAP waiting a full minute per request to
+  find out — and the handshake asks CODAP for far less work than the requests this release exists to
+  stop failing.
 
   Only silence closes the connection, and every other way the handshake can fail leaves it open,
   because none of them says anything about whether CODAP is there: CODAP answering and declining,

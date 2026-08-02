@@ -184,11 +184,12 @@ declare const codapInterface: {
      * if the handshake does not succeed. The callback is invoked either way, as `sendRequest`'s is:
      * with the saved state on success, and with `undefined` on failure.
      *
-     * **When nothing answers the handshake the connection is closed**, so requests issued afterwards
-     * are refused at once rather than each waiting out `getRequestTimeout()`. The trigger is
+     * **When nothing answers the handshake the connection is marked closed**, so requests issued
+     * afterwards are refused at once rather than each waiting out `getRequestTimeout()`. The trigger is
      * iframe-phone's own 2 second advisory window, which is not proof that CODAP is absent: a CODAP
-     * that is alive but slow to complete the underlying "hello" exchange looks the same from here, and
-     * its connection will be closed. Call `init()` again to retry — it re-establishes the connection.
+     * that is alive but slow to complete the underlying "hello" exchange looks the same from here.
+     * That guess is not final, though — if CODAP answers after all, the connection reopens by itself
+     * and requests resume. Calling `init()` again also re-establishes it.
      *
      * Any other failure leaves the connection usable and fails only the handshake, since none of them
      * says anything about whether CODAP is there: CODAP answering and declining, CODAP answering with
