@@ -144,7 +144,8 @@ declare const codapInterface: {
         countDiRplFail: number;
         /**
          * How many requests failed, and so rejected: no connection to send on, no answer within the
-         * deadline, an answer carrying no result, or the send itself throwing.
+         * deadline, an answer carrying no result, the send itself throwing, or — for `init()`'s handshake
+         * alone — nothing answering within iframe-phone's advisory window.
          *
          * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
          * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.
@@ -247,7 +248,8 @@ declare const codapInterface: {
         countDiRplFail: number;
         /**
          * How many requests failed, and so rejected: no connection to send on, no answer within the
-         * deadline, an answer carrying no result, or the send itself throwing.
+         * deadline, an answer carrying no result, the send itself throwing, or — for `init()`'s handshake
+         * alone — nothing answering within iframe-phone's advisory window.
          *
          * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
          * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.

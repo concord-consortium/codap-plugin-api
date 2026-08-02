@@ -101,7 +101,8 @@ const stats = {
   countDiRplFail: 0,
   /**
    * How many requests failed, and so rejected: no connection to send on, no answer within the
-   * deadline, an answer carrying no result, or the send itself throwing.
+   * deadline, an answer carrying no result, the send itself throwing, or — for `init()`'s handshake
+   * alone — nothing answering within iframe-phone's advisory window.
    *
    * `countDiReq - countDiRplSuccess - countDiRplFail - countDiReqFailed` is the number still in
    * flight. `countDiReqDeadlineExceeded` counts the subset that ran out of time.
@@ -462,15 +463,20 @@ function issueRequest (message: any, options: IRequestOptions = {}) {
           // so this is not an outcome — except during the handshake, where silence is the answer.
           stats.countDiRplTimeout++;
           if (onSilence) {
-            // `finally`, because this runs inside iframe-phone's message listener: a throw from a
-            // supplied function must not leave the request unsettled and escape into that listener,
-            // which is the failure this module exists to prevent. Every other consumer-supplied
-            // function here is guarded the same way.
+            // This runs inside iframe-phone's message listener, so a throw from a supplied function
+            // must neither leave the request unsettled nor escape into that listener — the failure
+            // this module exists to prevent. Reported rather than rethrown, and the request settles
+            // either way, which is how every other supplied function here is handled.
+            //
+            // Defensive: the only `onSilence` today cannot throw, so there is no test for this. It
+            // is guarded because `onSilence` is a general option, and because a supplied function
+            // running on a listener's stack is exactly where this module has been bitten before.
             try {
               onSilence();
-            } finally {
-              settleFailure("handleResponse: CODAP request timed out: " + describeMessage(message));
+            } catch (error) {
+              reportCallbackError(error);
             }
+            settleFailure("handleResponse: CODAP request timed out: " + describeMessage(message));
           }
           return;
         }
