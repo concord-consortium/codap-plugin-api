@@ -601,7 +601,12 @@ export const codapInterface = {
    * iframe-phone's own 2 second advisory window, which is not proof that CODAP is absent: a CODAP
    * that is alive but slow to complete the underlying "hello" exchange looks the same from here.
    * That guess is not final, though — if CODAP answers after all, the connection reopens by itself
-   * and requests resume. Calling `init()` again also re-establishes it.
+   * and requests resume.
+   *
+   * The reopen recovers the connection, not the handshake: this promise stays rejected, and the saved
+   * state that late reply carried is **not** delivered, so `getInteractiveState()` is still empty. A
+   * plugin that restores state should call `init()` again rather than rely on the reopen — otherwise
+   * it will answer CODAP's next request for its state with nothing, overwriting what was stored.
    *
    * Any other failure leaves the connection usable and fails only the handshake, since none of them
    * says anything about whether CODAP is there: CODAP answering and declining, CODAP answering with
@@ -662,8 +667,14 @@ export const codapInterface = {
         // notification. That is positive evidence it is there, and it outranks this handshake's
         // silence: an ordinary request can be answered while the handshake is still outstanding, and
         // an earlier init() can have been answered on a connection this one has since replaced.
-        // `init()` sets the state back to "preinit" before each handshake, so a deliberate re-init
-        // that genuinely draws no reply still closes the connection.
+        //
+        // `init()` resets the state to "preinit" before each handshake, so what suppresses the close
+        // is activity observed since that reset — not necessarily activity on this endpoint, since
+        // `markConnectionActive` asks only that some connection exists. A reply to a request issued
+        // before an intervening `destroy()` therefore counts. That is deliberate rather than merely
+        // tolerated: every endpoint built against `window.parent` shares one iframe-phone singleton,
+        // so such a reply really is the parent talking, and the parent is what this is evidence
+        // about. A re-init that draws no reply, with nothing else arriving, still closes.
         if (connection === endpoint && connectionState !== "active") {
           // The state is closed but the endpoint is kept. Requests are refused either way, since the
           // `case "closed"` branch does not consult it — but keeping it is what lets a reply arriving
@@ -681,6 +692,14 @@ export const codapInterface = {
         const success = resp && resp[1] && resp[1].success;
         const receivedFrame = success && resp[1].values;
         const savedState = receivedFrame && receivedFrame.savedState;
+        if (!connection) {
+          // `destroy()` ran while this handshake was outstanding. Resolving would hand the caller a
+          // connection they have already torn down — state `"closed"`, every request refused — and
+          // merge saved state into a plugin that is going away. What they did outranks what CODAP
+          // said, so this fails instead.
+          rejectHandshake("init: the connection was destroyed before the handshake completed");
+          return;
+        }
         if (success) {
           // Object.assign onto a value that came out of a saved document can throw -- a getter that
           // throws, a non-writable property -- and before `resolve` that would leave init() pending
@@ -740,8 +759,17 @@ export const codapInterface = {
   },
 
   /**
-   * Current known state of the connection
-   * @param {'preinit' || 'init' || 'active' || 'inactive' || 'closed'}
+   * Current known state of the connection. One of three values:
+   *
+   * - `"preinit"` — no handshake has completed yet, either before the first `init()` or during one.
+   * - `"active"` — CODAP has been heard from: it answered a request, or sent a notification.
+   * - `"closed"` — requests are refused without being sent. Two causes, which behave differently:
+   *   `destroy()`, which is final until `init()` is called again; and a handshake that nothing
+   *   answered, which reverts to `"active"` by itself if CODAP answers after all.
+   *
+   * This is the only way to observe either of those, since neither raises an event.
+   *
+   * @returns {'preinit' | 'active' | 'closed'}
    */
   getConnectionState () {return connectionState;},
 
@@ -811,6 +839,11 @@ export const codapInterface = {
     // can surface against a re-initialized instance. They used to fail within iframe-phone's ~2s by
     // accident. Doing it needs a registry of in-flight requests, since `isSettled` and
     // `timeoutTimer` are locals inside each issueRequest executor.
+    //
+    // A resolution is the sharper case, not a rejection: an outstanding handshake that CODAP answers
+    // after teardown would otherwise resolve `init()` against a connection the caller has closed, and
+    // merge saved state into a plugin that is going away. `getFrameRespHandler` refuses that
+    // explicitly for now; the registry would cover it along with everything else.
     //
     // Unsubscribe from iframe-phone, whose endpoint exposes `disconnect()`: dropping the reference
     // leaves its window message listener installed, so CODAP's notifications still reach

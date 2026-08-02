@@ -423,9 +423,11 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     expectSettledOnce(callerCallback, { success: true, values: 1 });
   });
 
-  // A reply can arrive after the deadline has already failed the request. It must not revive it,
-  // report a success against it, or mark a connection the caller has given up on as live.
-  it("a reply after the deadline changes nothing", async () => {
+  // A reply can arrive after the deadline has already failed the request. It must not revive that
+  // request or report a success against it. It is still evidence that CODAP is there, which is a
+  // separate matter and deliberately not suppressed -- see the by-time half of the rule on
+  // markConnectionActive.
+  it("a reply after the deadline does not revive the request", async () => {
     jest.useRealTimers();
     await initInterface();
     const callerCallback = jest.fn();
@@ -575,6 +577,21 @@ describe("codapInterface.init", () => {
     await expect(request).resolves.toEqual({ success: true });
   });
 
+  // A plugin can tear down while its handshake is still outstanding -- unmounting under StrictMode
+  // does exactly that. Resolving then would hand back a connection the caller has already closed,
+  // and merge saved state into a plugin that is going away.
+  it("fails rather than resolving against a connection destroy() has closed", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+
+    fresh.destroy();
+    lastCallback()([{ success: true }, { success: true, values: { savedState: { a: 1 } } }]);
+
+    await expect(initPromise).rejects.toThrow(/destroyed/);
+    expect(fresh.getConnectionState()).toBe("closed");
+    expect(fresh.getInteractiveState()).toEqual({});
+  });
+
   // React's StrictMode double-invokes effects, and the README initializes from one, so two
   // handshakes can be outstanding at once. The loser must not close the winner's connection: an
   // init() that resolved and then handed back a dead connection reports nothing at all.
@@ -675,6 +692,29 @@ describe("codapInterface.init", () => {
     lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
     await expect(retry).resolves.toBeDefined();
   });
+
+  // The fast-fail belongs to the handshake request itself, not to a window of time: an
+  // ordinary request issued while the handshake is outstanding is a normal request, and
+  // killing it at 2s would reintroduce the failure this deadline handling exists to prevent.
+  it("does not fail fast for other requests issued while the handshake is outstanding",
+    async () => {
+      const fresh = await freshInterface();
+
+      const initPromise = fresh.init({ name: "test", title: "test" } as any);
+      const request = fresh.sendRequest({ action: "create", resource: "dataContext[x].item" });
+      let settled = false;
+      request.then(() => (settled = true), () => (settled = true));
+
+      advisoryTimeout(callbackAt(1));   // the ordinary request's advisory timeout
+      await flush();
+
+      expect(settled).toBe(false);
+
+      // settle both so neither leaves its deadline timer running past the test
+      callbackAt(0)([{ success: true }, { success: true, values: { savedState: {} } }]);
+      callbackAt(1)({ success: true });
+      await Promise.all([initPromise, request]);
+    });
 });
 
 describe("codapInterface.destroy", () => {
@@ -791,43 +831,6 @@ describe("codapInterface.sendRequest callback errors", () => {
   });
 });
 
-describe("codapInterface.init handshake", () => {
-  // Ignoring the advisory timeout is right once a request is known to have reached CODAP, but the
-  // handshake is precisely where "no reply" is evidence of "no CODAP" -- a plugin loaded outside
-  // CODAP must not wait out the full request timeout to discover that.
-  it("fails fast when nothing answers the handshake", async () => {
-    const fresh = await freshInterface();
-
-    const initPromise = fresh.init({ name: "test", title: "test" } as any);
-    advisoryTimeout(lastCallback());    // iframe-phone's 2s advisory timeout, nothing there
-
-    await expect(initPromise).rejects.toThrow(/timed out/);
-  });
-
-  // The fast-fail belongs to the handshake request itself, not to a window of time: an ordinary
-  // request issued while the handshake is still outstanding is a normal request, and killing it
-  // at 2s would reintroduce exactly the failure this timeout handling exists to prevent.
-  it("does not fail fast for other requests issued while the handshake is outstanding",
-    async () => {
-      const fresh = await freshInterface();
-
-      const initPromise = fresh.init({ name: "test", title: "test" } as any);
-      const request = fresh.sendRequest({ action: "create", resource: "dataContext[x].item" });
-      let settled = false;
-      request.then(() => (settled = true), () => (settled = true));
-
-      advisoryTimeout(callbackAt(1));   // the ordinary request's advisory timeout
-      await flush();
-
-      expect(settled).toBe(false);
-
-      // settle both so neither leaves its deadline timer running past the test
-      callbackAt(0)([{ success: true }, { success: true, values: { savedState: {} } }]);
-      callbackAt(1)({ success: true });
-      await Promise.all([initPromise, request]);
-    });
-
-});
 
 describe("codapInterface stats", () => {
   it("counts an advisory timeout without failing the request", async () => {

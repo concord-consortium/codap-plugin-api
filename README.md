@@ -33,6 +33,32 @@ request API.
 
 For more examples of how to use the npm package, see the [CODAP Plugin Starter Project](https://github.com/concord-consortium/codap-plugin-starter-project).
 
+### Connecting to CODAP
+
+`initializePlugin()` performs a handshake with CODAP and resolves with whatever state CODAP had saved
+for your plugin. If nothing answers that handshake within about two seconds, it rejects and the
+connection is marked closed, so requests issued afterwards are refused immediately rather than each
+waiting out the request timeout below.
+
+Two seconds is not proof CODAP is absent. A CODAP that is alive but slow to finish the underlying
+handshake looks the same from here, so treat a rejection as "not connected yet" rather than "not
+running inside CODAP":
+
+```js
+initializePlugin(options)
+  .catch(error => console.warn("could not connect to CODAP", error));
+```
+
+If that CODAP does answer afterwards, the connection reopens by itself and requests resume — but the
+promise above stays rejected, and the saved state that late answer carried is **not** delivered. So a
+plugin that restores saved state should call `initializePlugin()` again rather than rely on the
+reopen; otherwise it will answer CODAP's next request for its state with nothing, overwriting what
+was stored. `codapInterface.getConnectionState()` reports `"preinit"`, `"active"` or `"closed"`, and
+is the only way to observe either the close or the reopen.
+
+`codapInterface.destroy()` closes the connection deliberately, and that one does not reopen;
+`initializePlugin()` can be called again to reconnect.
+
 ### Request timeouts
 
 A request waits up to 60 seconds for CODAP to respond before it is rejected. Requests over large

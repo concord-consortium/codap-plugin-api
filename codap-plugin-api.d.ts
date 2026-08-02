@@ -189,7 +189,12 @@ declare const codapInterface: {
      * iframe-phone's own 2 second advisory window, which is not proof that CODAP is absent: a CODAP
      * that is alive but slow to complete the underlying "hello" exchange looks the same from here.
      * That guess is not final, though — if CODAP answers after all, the connection reopens by itself
-     * and requests resume. Calling `init()` again also re-establishes it.
+     * and requests resume.
+     *
+     * The reopen recovers the connection, not the handshake: this promise stays rejected, and the saved
+     * state that late reply carried is **not** delivered, so `getInteractiveState()` is still empty. A
+     * plugin that restores state should call `init()` again rather than rely on the reopen — otherwise
+     * it will answer CODAP's next request for its state with nothing, overwriting what was stored.
      *
      * Any other failure leaves the connection usable and fails only the handshake, since none of them
      * says anything about whether CODAP is there: CODAP answering and declining, CODAP answering with
@@ -205,8 +210,17 @@ declare const codapInterface: {
      */
     init(iConfig: IConfig, iCallback?: ((arg0: any) => void) | undefined): Promise<any>;
     /**
-     * Current known state of the connection
-     * @param {'preinit' || 'init' || 'active' || 'inactive' || 'closed'}
+     * Current known state of the connection. One of three values:
+     *
+     * - `"preinit"` — no handshake has completed yet, either before the first `init()` or during one.
+     * - `"active"` — CODAP has been heard from: it answered a request, or sent a notification.
+     * - `"closed"` — requests are refused without being sent. Two causes, which behave differently:
+     *   `destroy()`, which is final until `init()` is called again; and a handshake that nothing
+     *   answered, which reverts to `"active"` by itself if CODAP answers after all.
+     *
+     * This is the only way to observe either of those, since neither raises an event.
+     *
+     * @returns {'preinit' | 'active' | 'closed'}
      */
     getConnectionState(): string;
     /**

@@ -84,9 +84,11 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
 
   **What counts as "nothing answers" is iframe-phone's own 2 second advisory window**, and that is
   not proof CODAP is absent: a CODAP that is alive but slow to complete the underlying "hello"
-  exchange looks identical from here. The guess is not final, though. If that CODAP answers after
-  all, its reply reopens the connection and requests resume, so being slow costs a plugin the
-  handshake rather than the session; calling `init()` again also re-establishes it. The trade is
+  exchange looks identical from here. The guess is not final, though: if that CODAP answers after
+  all, its reply reopens the connection and requests resume. Note what the reopen does not recover —
+  `initializePlugin()` stays rejected and the saved state that late reply carried is not delivered,
+  so a plugin that restores state should call `init()` again rather than rely on it, or it will
+  answer CODAP's next request for its state with nothing and overwrite what was stored. The trade is
   deliberate — the alternative is a plugin loaded outside CODAP waiting a full minute per request to
   find out — and the handshake asks CODAP for far less work than the requests this release exists to
   stop failing.
@@ -144,7 +146,8 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   `component[undefined]` when the frame comes back without an id. The other two reject with a
   descriptive message: a lookup that gets no answer says nothing about whether the name is free or
   the collection exists, and that is the caller's to decide.
-- A reply arriving after its request had already failed no longer marks the connection active or
-  counts a success against it.
+- A reply arriving after its request had already failed no longer counts a success against it, or
+  settles it a second time. It is still recorded as evidence that CODAP is there, which is what lets
+  it reopen a connection closed for silence.
 - `stats.timeDiFirstReq` was never set; each data-interactive request overwrote
   `stats.timeCodapFirstReq` instead.
