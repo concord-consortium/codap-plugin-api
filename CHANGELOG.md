@@ -42,10 +42,13 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   forever, a silent no-op. It now rejects. Since the documented pattern of passing a callback and
   discarding the promise leaves nothing attached to observe that, an unhandled rejection appears
   where nothing happened before. Attach a `.catch`, even when the callback is doing the real work.
-- **An exception thrown by `init()`'s `stateHandler` or callback no longer prevents it from
-  settling.** They were invoked before the handshake's promise was resolved, so a throw from one left
-  `initializePlugin()` pending forever with the exception discarded. They are now invoked after it
-  settles, and what they throw is reported the same way a request callback's exception is.
+- **An exception thrown while `init()` finishes no longer prevents it from settling.** Merging the
+  saved state CODAP returned, and then `stateHandler` and the callback, all ran before the handshake's
+  promise was resolved, so a throw from any of them left `initializePlugin()` pending forever with the
+  exception discarded. A saved state carrying a throwing getter was enough to do it. They now run
+  after it settles, and what they throw is reported the way a request callback's exception is. Note
+  that a merge which throws partway leaves the interactive state partly updated, so a plugin that
+  cares should treat the uncaught error as meaning `getInteractiveState()` may be incomplete.
 - **An exception thrown by a request callback is rethrown as an uncaught error** rather than being
   swallowed. The request has already settled by the time its callback runs, so a throw from it is a
   bug in the callback rather than a failure of the request — but it must not escape into the stack
@@ -79,12 +82,20 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
   requests are now refused at once. `init()` can be called again to retry, and it rejects with an
   `Error` like every other failure.
 
+  **What counts as "nothing answers" is iframe-phone's own 2 second advisory window**, and that is
+  not proof CODAP is absent: a CODAP that is alive but slow to complete the underlying "hello"
+  exchange looks identical from here, and its connection will be closed where on `^0.1.9` it stayed
+  usable. Calling `init()` again re-establishes it. The trade is deliberate — the alternative is a
+  plugin loaded outside CODAP waiting a full minute per request to find out — and the handshake asks
+  CODAP for far less work than the requests this release exists to stop failing.
+
   Only silence closes the connection, and every other way the handshake can fail leaves it open,
   because none of them says anything about whether CODAP is there: CODAP answering and declining,
-  CODAP answering with no value, and the handshake message failing to post all leave a usable
-  connection and fail only the handshake. And a handshake closes only the endpoint it created, so of
-  two overlapping `init()` calls — which React's StrictMode produces from a single effect — the one
-  that fails cannot close the connection the other established.
+  CODAP answering with no value, and the handshake message failing to send all leave a usable
+  connection and fail only the handshake. Nor does silence close a connection CODAP has already been
+  seen answering — a reply to any other request, or a notification, outranks it — so an `init()` that
+  goes silent cannot close a connection an earlier one established, in either order. This matters for
+  two overlapping `init()` calls, which React's StrictMode produces from a single effect.
 
 ### Changed
 

@@ -131,25 +131,6 @@ describe("the callback type", () => {
   });
 });
 
-describe("codapInterface.sendRequest", () => {
-  beforeEach(async () => {
-    jest.useRealTimers();
-    await initInterface();
-  });
-
-  it("resolves with the real response when it arrives after the advisory timeout", async () => {
-    const request = codapInterface.sendRequest({ action: "create", resource: "dataContext[x].item" });
-    const callback = lastCallback();
-
-    advisoryTimeout(callback);        // the request is still in flight
-    await flush();
-    callback({ success: true, values: { itemIDs: ["a", "b"] } });   // CODAP finally replies
-
-    await expect(request).resolves.toEqual({ success: true, values: { itemIDs: ["a", "b"] } });
-  });
-
-});
-
 describe("codapInterface.sendRequest hard timeout", () => {
   beforeEach(async () => {
     jest.useRealTimers();
@@ -274,6 +255,9 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     expect(codapInterface.getStats().countDiRplFail).toBe(before.countDiRplFail);
   });
 
+  // The probe comes first, as it does in life: iframe-phone reports no reply at 2s, the request
+  // stays in flight, and only the deadline ends it. Both events reaching one request is the
+  // sequence this deadline handling exists to get right.
   it("the deadline passes: rejects, and says so in the stats", async () => {
     jest.useRealTimers();
     await initInterface();
@@ -283,6 +267,11 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     jest.useFakeTimers();
     const request = codapInterface.sendRequest({ action: "get", resource: "dataContext[x]" },
                                                callerCallback);
+    // settling is synchronous, so if the probe were treated as an outcome the callback would
+    // already have fired by the next line
+    advisoryTimeout(lastCallback());
+    expect(callerCallback).not.toHaveBeenCalled();
+
     const rejection = expect(request).rejects.toThrow(/exceeded/);
     jest.advanceTimersByTime(kDefaultTimeout);
     await rejection;
@@ -349,6 +338,29 @@ describe("codapInterface.sendRequest settles every path through the contract", (
     await rejection;
 
     expectSettledOnce(callerCallback, undefined);
+  });
+
+  // The requests likeliest to reach a failure message are the largest -- the deadline exists for a
+  // createItems carrying thousands of items -- so the message quotes only the head of the request.
+  // Every other assertion here matches on that head, which is what would make losing this invisible.
+  it("bounds how much of the request a failure message quotes", async () => {
+    jest.useRealTimers();
+    await initInterface();
+    const huge = {
+      action: "create", resource: "dataContext[x].item",
+      values: Array.from({ length: 2000 }, (_, i) => ({ index: i, padding: "x".repeat(40) }))
+    };
+
+    jest.useFakeTimers();
+    const request = codapInterface.sendRequest(huge);
+    jest.advanceTimersByTime(kDefaultTimeout);
+    // cast because sendRequest resolves `unknown`; the rejection is always an Error
+    const error = await request.catch((e: Error) => e) as Error;
+
+    expect(error.message).toMatch(/^sendRequest: CODAP request exceeded/);
+    expect(error.message).toMatch(/… \(truncated\)$/);
+    expect(JSON.stringify(huge).length).toBeGreaterThan(50000);   // the request really is enormous
+    expect(error.message.length).toBeLessThan(700);
   });
 
   // `.success` read off a null reply would throw inside iframe-phone's message listener, where
@@ -464,7 +476,12 @@ describe("codapInterface.init", () => {
     lastCallback()(undefined);            // one argument: a real reply, carrying nothing
 
     await expect(initPromise).rejects.toThrow(/no result/);
-    expect(fresh.getConnectionState()).not.toBe("closed");
+
+    // asserted by using the connection, not by reading its state: "not closed" would also hold of a
+    // connection that was never established
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
   });
 
   // The endpoint is fine; the message was not. Nothing here says whether CODAP is listening.
@@ -475,7 +492,66 @@ describe("codapInterface.init", () => {
     });
 
     await expect(fresh.init({ name: "test", title: "test" } as any)).rejects.toThrow(/cloned/);
-    expect(fresh.getConnectionState()).not.toBe("closed");
+
+    // the endpoint survived the message that could not be posted, so a later request goes out on it
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
+  // Silence is only ever evidence of absence, so anything CODAP has already answered outranks it.
+  // An ordinary request can be issued and answered while the handshake is still outstanding.
+  it("keeps a connection CODAP answered during the handshake", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+
+    const answered = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    callbackAt(1)({ success: true });
+    await expect(answered).resolves.toEqual({ success: true });
+
+    advisoryTimeout(callbackAt(0));                       // and only then does the handshake give up
+    await expect(initPromise).rejects.toThrow(/timed out/);
+
+    expect(fresh.getConnectionState()).toBe("active");
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[y]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
+  // A reply is not the only thing that proves CODAP is there. A notification arrives on the same
+  // channel and marks the connection active by a different route, so it counts as evidence too.
+  it("keeps a connection CODAP sent a notification on during the handshake", async () => {
+    const fresh = await freshInterface();
+    const initPromise = fresh.init({ name: "test", title: "test" } as any);
+
+    lastNotificationHandler()({ action: "notify", resource: "documentChangeNotice", values: {} },
+                              () => undefined);
+    advisoryTimeout(lastCallback());
+    await expect(initPromise).rejects.toThrow(/timed out/);
+
+    expect(fresh.getConnectionState()).toBe("active");
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
+  });
+
+  // The mirror of the case below: here the silent handshake is the one that won the race, and must
+  // still not close a connection an answered handshake established.
+  it("keeps a connection an earlier handshake established, when a later one goes silent", async () => {
+    const fresh = await freshInterface();
+    const first = fresh.init({ name: "test", title: "test" } as any);
+    const second = fresh.init({ name: "test", title: "test" } as any);
+
+    callbackAt(0)([{ success: true }, { success: true, values: { savedState: {} } }]);
+    await expect(first).resolves.toBeDefined();
+
+    advisoryTimeout(callbackAt(1));
+    await expect(second).rejects.toThrow(/timed out/);
+
+    expect(fresh.getConnectionState()).toBe("active");
+    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
+    lastCallback()({ success: true });
+    await expect(request).resolves.toEqual({ success: true });
   });
 
   // React's StrictMode double-invokes effects, and the README initializes from one, so two
@@ -730,39 +806,6 @@ describe("codapInterface.init handshake", () => {
       await Promise.all([initPromise, request]);
     });
 
-  it("does not fail fast once the connection is established", async () => {
-    const fresh = await freshInterface();
-
-    const initPromise = fresh.init({ name: "test", title: "test" } as any);
-    lastCallback()([{ success: true }, { success: true, values: { savedState: {} } }]);
-    await initPromise;
-
-    let settled = false;
-    const request = fresh.sendRequest({ action: "get", resource: "dataContext[x]" });
-    request.then(() => (settled = true), () => (settled = true));
-
-    const callback = lastCallback();
-    advisoryTimeout(callback);
-    await flush();
-
-    expect(settled).toBe(false);
-
-    // settle it so its deadline timer doesn't outlive the test
-    callback({ success: true });
-    await request;
-  });
-});
-
-describe("codapInterface.sendRequest without a connection", () => {
-  // Before init() there is no connection to call, and nothing would ever settle the promise --
-  // leaving the caller awaiting forever, which is the failure this timeout handling exists to
-  // prevent.
-  it("rejects rather than leaving the caller waiting forever", async () => {
-    const fresh = await freshInterface();
-
-    await expect(fresh.sendRequest({ action: "get", resource: "dataContext[x]" }))
-      .rejects.toThrow(/non-existent CODAP connection/);
-  });
 });
 
 describe("codapInterface stats", () => {

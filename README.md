@@ -81,7 +81,8 @@ codapInterface.sendRequest([firstRequest, secondRequest], (results?: IResult[]) 
 
 `sendRequest` returns a promise whether or not a callback is passed, and that promise rejects with
 an `Error` on the same failures the callback reports as `undefined`: the request exceeded its
-deadline, CODAP answered with no value, or there was no connection to send it on. A request issued
+deadline, CODAP answered with no value, there was no connection to send it on, or the request could
+not be sent at all — an uncloneable value in the message, say. A request issued
 before `initializePlugin()` is called, or after `codapInterface.destroy()`, is refused rather than
 sent, and rejects at once. A rejected promise with nothing attached to it becomes an unhandled
 rejection, so handle the promise even when the callback is doing the real work:
