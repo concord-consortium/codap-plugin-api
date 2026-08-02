@@ -1,16 +1,10 @@
-# Everything a consumer does not need. The package is the bundle at the repository root plus its
-# type declarations; sources, configuration and maintainer docs stay in the repository.
+# Everything a consumer does not need. The package is the bundle at the repository root, its source
+# map and its type declarations; sources, configuration and maintainer docs stay in the repository.
 node_modules/
 build/
 src/
 .gitignore
 .vscode/
-doc/
 rollup.config.mjs
-tsconfig.json
+tsconfig*.json
 .eslintrc*.js
-
-# The bundle's source map is generated from the intermediate build/ output rather than from the
-# TypeScript, because rollup is fed compiled JS. It is therefore 79kB that maps to files no one has,
-# larger than the code it describes. Publishing a useful one means having rollup consume src/ directly.
-*.js.map

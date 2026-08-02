@@ -103,6 +103,9 @@ only by moving to `^0.2.0` deliberately, rather than silently on their next inst
 
 ### Changed
 
+- **`iframe-phone` is now the only runtime dependency.** `fork-ts-checker-webpack-plugin` was listed
+  under `dependencies`, so every consumer of this package was installing a webpack plugin in order to
+  use it, for a library that has no webpack build. Nothing imported it.
 - **A request now waits up to 60 seconds for a CODAP response, rather than about 2 seconds.**
   iframe-phone's 2s timer reports that no reply has arrived yet; it does not cancel the request,
   and the real reply still arrives afterwards. Treating it as a failure meant a large request —

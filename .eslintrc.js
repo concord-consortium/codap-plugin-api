@@ -18,14 +18,10 @@ module.exports = {
         alwaysTryTypes: true,
         project: "."
       }
-    },
-    react: {
-      pragma: "React",
-      version: "detect"
     }
   },
   ignorePatterns: [
-    "dist/", "node_modules/"
+    "build/", "node_modules/"
   ],
   extends: [
     "eslint:recommended",
@@ -54,7 +50,6 @@ module.exports = {
     "import/no-cycle": "warn",
     "import/no-extraneous-dependencies": "warn",
     "import/no-useless-path-segments": "warn",
-    "jsx-quotes": ["error", "prefer-double"],
     "max-len": ["off", { code: 120, ignoreUrls: true }],
     "no-bitwise": "error",
     "no-debugger": "off",

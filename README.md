@@ -162,13 +162,19 @@ To release a new version:
 
 1. Make sure you have an npm publishing account under the concordconsortium namespace.
 
-2. Update the version number in `package.json`.
+2. Update the version number in `package.json`, and add a `CHANGELOG.md` entry for it.
 
 3. Run `npm install` to update the version number in `package-lock.json`.
 
-4. Run `npm run build` to build the new version.
+4. Run `npm run build`, and commit `codap-plugin-api.d.ts` if the build changed it.
 
 5. Run `npm publish --access public` to publish the new version.
+
+Publishing runs `prepublishOnly` first, which builds, checks that the committed
+`codap-plugin-api.d.ts` matches what the build produces, then tests and lints. A failure in any of
+those aborts the publish, so step 4 exists to get the regenerated declarations committed rather than
+to make the build happen — publishing would rebuild anyway, and then refuse to continue because the
+working tree no longer matched the repository.
 
 ## License
 

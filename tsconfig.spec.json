@@ -1,0 +1,10 @@
+// Compiler options for the specs, used by ts-jest. Identical to the build's, except that the specs
+// get jest's globals. Keeping them out of tsconfig.json is what makes a test-only identifier left in
+// shipped source a compile error rather than something that builds cleanly.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest"]
+  },
+  "include": ["./src/**/*"]
+}

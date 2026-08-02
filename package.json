@@ -10,12 +10,16 @@
   ],
   "main": "codap-plugin-api.js",
   "typings": "codap-plugin-api.d.ts",
-  "browserslist": "> 0.2%, last 5 versions, Firefox ESR, not dead, not ie > 0",
   "jest": {
     "preset": "ts-jest/presets/js-with-ts",
     "testEnvironment": "jsdom",
     "transform": {
-      "^.+\\.tsx?$": "ts-jest"
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.spec.json"
+        }
+      ]
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
     "testPathIgnorePatterns": [
@@ -34,7 +38,8 @@
   },
   "scripts": {
     "build": "run-s build:tsc build:rollup",
-    "prepublishOnly": "run-s build test lint",
+    "verify:dts": "git diff --exit-code -- codap-plugin-api.d.ts",
+    "prepublishOnly": "run-s build verify:dts test lint",
     "prebuild:tsc": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
     "build:tsc": "tsc",
     "build:rollup": "rollup --config",

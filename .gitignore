@@ -7,7 +7,6 @@ node_modules
 npm-error.log
 top-test
 .DS_Store
-.nyc_output
 
 # Editors
 .idea
