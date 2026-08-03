@@ -4,7 +4,7 @@ module.exports = {
     ecmaVersion: 2018,
     sourceType: "module",
   },
-  plugins: ["@typescript-eslint", "json"],
+  plugins: ["@typescript-eslint"],
   env: {
     browser: true,
     es6: true
@@ -29,7 +29,6 @@ module.exports = {
     "plugin:eslint-comments/recommended",
     "plugin:import/recommended",
     "plugin:import/typescript",
-    "plugin:json/recommended",
   ],
   rules: {
     "@typescript-eslint/explicit-module-boundary-types": "off",
@@ -46,7 +45,7 @@ module.exports = {
     "dot-notation": "error",
     "eol-last": "warn",
     "eqeqeq": ["error", "smart"],
-    "eslint-comments/no-unused-disable": "off",   // enabled in .eslintrc.build.js
+    "eslint-comments/no-unused-disable": "off",
     "import/no-cycle": "warn",
     "import/no-extraneous-dependencies": "warn",
     "import/no-useless-path-segments": "warn",
@@ -93,18 +92,6 @@ module.exports = {
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
         "jest/no-done-callback": "off"
-      }
-    },
-    { // eslint configs
-      files: [".eslintrc*.js"],
-      env: {
-        node: true
-      }
-    },
-    { // rollup config
-      files: ["rollup.config.mjs"],
-      env: {
-        node: true
       }
     }
   ]

@@ -1,10 +1,27 @@
 // Compiler options for the specs, used by ts-jest. Identical to the build's, except that the specs
 // get jest's globals. Keeping them out of tsconfig.json is what makes a test-only identifier left in
 // shipped source a compile error rather than something that builds cleanly.
+//
+// The file list is the specs plus the ambient declarations, and both parts are load-bearing.
+//
+// ts-jest builds its program from this list rather than only reading `compilerOptions`, so dropping
+// `src/typings.d.ts` takes the iframe-phone shim out of scope and every suite fails to compile with
+// TS2575 at the `new IframePhoneRpcEndpoint(...)` call. Ambient declarations are reached by being
+// included, never by being imported.
+//
+// `exclude` is reset because it is inherited, and the base excludes exactly the spec files this
+// project is for. Left inherited, this resolves to the library sources and no specs at all, which
+// type-checks shipped code with jest's globals in scope — the hole the split exists to close — and
+// emits it into the `build/` directory rollup reads.
+//
+// The library files the specs import are still pulled in, and `types` is program-wide, so they see
+// jest's globals here too. That is unavoidable, and is why the guard lives in the base config that
+// the build uses rather than in this one.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["jest"]
   },
-  "include": ["./src/**/*"]
+  "include": ["./src/**/*.spec.ts", "./src/**/*.test.ts", "./src/**/*.d.ts"],
+  "exclude": []
 }
