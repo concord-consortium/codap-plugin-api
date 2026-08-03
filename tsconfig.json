@@ -13,16 +13,18 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "strict": true,
+    // No ambient type packages in the build: a test-only identifier left in shipped source should
+    // fail to compile. The specs need jest's globals, and get them from tsconfig.spec.json, which
+    // ts-jest is pointed at. They used to arrive by accident here, through a transitive
+    // `/// <reference types="jest" />` in the types of a matcher library nothing used.
     "types": [],
-    "jsx": "react",
     "lib": ["dom", "dom.iterable", "es2018"]
   },
   "include": [
     "./src/**/*"
   ],
   // Keep test files out of the build output; jest's testRegex would otherwise match the compiled
-  // copies and run every suite twice. src/test is deliberately not excluded: setupTests.ts is what
-  // pulls in the ambient jest globals, and jest's testRegex doesn't match its name.
+  // copies and run every suite twice.
   "exclude": [
     "./src/**/*.spec.ts",
     "./src/**/*.test.ts",

@@ -4,7 +4,7 @@ module.exports = {
     ecmaVersion: 2018,
     sourceType: "module",
   },
-  plugins: ["@typescript-eslint", "json"],
+  plugins: ["@typescript-eslint"],
   env: {
     browser: true,
     es6: true
@@ -18,14 +18,10 @@ module.exports = {
         alwaysTryTypes: true,
         project: "."
       }
-    },
-    react: {
-      pragma: "React",
-      version: "detect"
     }
   },
   ignorePatterns: [
-    "dist/", "node_modules/"
+    "build/", "node_modules/"
   ],
   extends: [
     "eslint:recommended",
@@ -33,7 +29,6 @@ module.exports = {
     "plugin:eslint-comments/recommended",
     "plugin:import/recommended",
     "plugin:import/typescript",
-    "plugin:json/recommended",
   ],
   rules: {
     "@typescript-eslint/explicit-module-boundary-types": "off",
@@ -50,11 +45,10 @@ module.exports = {
     "dot-notation": "error",
     "eol-last": "warn",
     "eqeqeq": ["error", "smart"],
-    "eslint-comments/no-unused-disable": "off",   // enabled in .eslintrc.build.js
+    "eslint-comments/no-unused-disable": "off",
     "import/no-cycle": "warn",
     "import/no-extraneous-dependencies": "warn",
     "import/no-useless-path-segments": "warn",
-    "jsx-quotes": ["error", "prefer-double"],
     "max-len": ["off", { code: 120, ignoreUrls: true }],
     "no-bitwise": "error",
     "no-debugger": "off",
@@ -83,12 +77,14 @@ module.exports = {
   },
   overrides: [
     { // rules specific to Jest tests
-      files: ["src/**/*.test.*"],
+      // both suffixes, matching jest's own testRegex: the tests here are named *.spec.*, and this
+      // block silently applied to nothing while it listed only *.test.*
+      files: ["src/**/*.spec.*", "src/**/*.test.*"],
       env: {
         node: true,
         jest: true
       },
-      plugins: ["jest", "testing-library"],
+      plugins: ["jest"],
       extends: ["plugin:jest/recommended"],
       rules: {
         "@typescript-eslint/no-non-null-assertion": "off",
@@ -96,23 +92,6 @@ module.exports = {
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
         "jest/no-done-callback": "off"
-      }
-    },
-    { // eslint configs
-      files: [".eslintrc*.js"],
-      env: {
-        node: true
-      }
-    },
-    { // webpack configs
-      files: ["**/webpack.config.js"],
-      env: {
-        node: true
-      },
-      rules: {
-        "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-var-requires": "off",
-        "quotes": ["error", "single", { allowTemplateLiterals: true, avoidEscape: true }],
       }
     }
   ]
